@@ -17,7 +17,6 @@ type Props = {
   pacienteNome: string;
   pacienteCpf: string;
   pacienteNascimento?: string;
-  triagemResumo: string;
   onVoltar: () => void;
   onPagamentoConfirmado: (atendimentoId: number) => void;
 };
@@ -37,7 +36,6 @@ export default function PagamentoConsulta({
   pacienteNome,
   pacienteCpf,
   pacienteNascimento,
-  triagemResumo,
   onVoltar,
   onPagamentoConfirmado,
 }: Props) {
@@ -122,7 +120,7 @@ export default function PagamentoConsulta({
           cpf: digits(pacienteCpf),
           email: pacienteLogado.email || undefined,
           dataNascimento: pacienteNascimento || undefined,
-          triagem: triagemResumo,
+          triagem: '(aguardando pagamento)',
           atendimentoParaTerceiro,
         });
         if (!criado.atendimentoId) throw new Error('Não foi possível criar o atendimento.');
@@ -195,9 +193,9 @@ export default function PagamentoConsulta({
 
   return (
     <View>
-      <View style={styles.successBadge}><Text style={styles.successBadgeText}>✓ TRIAGEM CONCLUÍDA</Text></View>
+      <View style={styles.stepBadge}><Text style={styles.stepBadgeText}>PAGAMENTO SEGURO</Text></View>
       <Text style={styles.title}>Finalize sua consulta</Text>
-      <Text style={styles.lead}>O pagamento é confirmado automaticamente e o atendimento entra na mesma fila do painel médico.</Text>
+      <Text style={styles.lead}>Assim que o pagamento for confirmado, o app libera uma triagem rápida antes de entrar na fila médica.</Text>
 
       <View style={styles.patientCard}>
         <Text style={styles.patientLabel}>PACIENTE</Text>
@@ -229,7 +227,7 @@ export default function PagamentoConsulta({
             <Text style={styles.disabledBadge}>EM BREVE</Text>
           </View>
 
-          <Pressable onPress={onVoltar} style={styles.backLink}><Text style={styles.backLinkText}>Voltar para a triagem</Text></Pressable>
+          <Pressable onPress={onVoltar} style={styles.backLink}><Text style={styles.backLinkText}>Voltar</Text></Pressable>
         </>
       ) : (
         <View style={styles.pixCard}>
@@ -253,7 +251,7 @@ export default function PagamentoConsulta({
           </View>
 
           <Pressable onPress={verificarAgora} style={styles.verifyButton}><Text style={styles.verifyText}>Já paguei · verificar agora</Text></Pressable>
-          <Text style={styles.safeText}>Você pode permanecer nesta tela. Assim que o PagBank confirmar o pagamento, o app continuará automaticamente.</Text>
+          <Text style={styles.safeText}>Assim que o PagBank confirmar, a triagem será liberada automaticamente. Você não precisará pagar novamente.</Text>
         </View>
       )}
     </View>
@@ -261,8 +259,8 @@ export default function PagamentoConsulta({
 }
 
 const styles = StyleSheet.create({
-  successBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 14 },
-  successBadgeText: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .7 },
+  stepBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 14 },
+  stepBadgeText: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .7 },
   title: { color: '#fff', fontSize: 27, fontWeight: '800', letterSpacing: -.5, marginBottom: 9 },
   lead: { color: '#a9b5b0', lineHeight: 21, marginBottom: 18 },
   patientCard: { backgroundColor: '#f7fbf8', borderRadius: 17, padding: 16, marginBottom: 14 },
