@@ -75,6 +75,11 @@ export type StatusPagBankResponse = {
   status?: string;
 };
 
+export type TriageMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 export async function solicitarOtpPaciente(telefone: string, email?: string, cpf?: string) {
   return postJson<SolicitarOtpResponse>('/api/paciente/otp/solicitar', { telefone, email, cpf });
 }
@@ -84,6 +89,10 @@ export async function verificarOtpPaciente(challengeId: string, codigo: string) 
     challenge_id: challengeId,
     codigo,
   });
+}
+
+export async function conversarTriagem(system: string, messages: TriageMessage[]) {
+  return postJson<{ text: string }>('/api/triage', { system, messages });
 }
 
 async function authenticatedFetch<T>(path: string): Promise<T> {
