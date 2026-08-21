@@ -17,8 +17,10 @@ import {
   carregarAgendamentos,
   carregarHistoricoPaciente,
   carregarPaciente,
+  conversarTriagem,
   solicitarOtpPaciente,
   verificarOtpPaciente,
+  type TriageMessage,
 } from './src/api/client';
 import {
   clearSessionToken,
@@ -30,8 +32,18 @@ import type { Agendamento, AtendimentoHistorico, Paciente } from './src/types';
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
 const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
 
+const SYSTEM_TRIAGE = `Você é o assistente de triagem do ConsultaJá24h para uma consulta médica por chat.
+O paciente já informou a queixa inicial. NÃO peça nome, telefone ou CPF.
+Conduza uma anamnese breve, em português brasileiro, com UMA pergunta por vez e NO MÁXIMO 4 perguntas adicionais.
+Priorize apenas o que muda a segurança e a condução: tempo de evolução, intensidade, febre, sintomas associados, sinais de alarme, alergias, doenças crônicas, medicamentos em uso e possibilidade de gestação quando pertinente.
+Não faça diagnóstico, não prescreva, não prometa atestado e não substitua o médico.
+Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda finalize o resumo para o médico.
+Quando já houver informação suficiente ou após a quarta resposta do paciente, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
+Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta adicional.`;
+
 type Tela = 'home' | 'perfil' | 'nova-consulta';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
+type EtapaConsulta = 'dados' | 'triagem' | 'pagamento';
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -489,29 +501,176 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
 
 function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: () => void }) {
   const [para, setPara] = useState<AtendimentoPara>('mim');
+  const [etapaConsulta, setEtapaConsulta] = useState<EtapaConsulta>('dados');
   const [nomeOutro, setNomeOutro] = useState('');
   const [cpfOutro, setCpfOutro] = useState('');
   const [nascimentoOutro, setNascimentoOutro] = useState('');
   const [queixa, setQueixa] = useState('');
+  const [triageMessages, setTriageMessages] = useState<TriageMessage[]>([]);
+  const [perguntaAtual, setPerguntaAtual] = useState('');
+  const [respostaTriagem, setRespostaTriagem] = useState('');
+  const [triagemResumo, setTriagemResumo] = useState('');
+  const [triagemLoading, setTriagemLoading] = useState(false);
 
-  function continuar() {
+  function validarDados() {
     if (para === 'outra-pessoa') {
-      if (nomeOutro.trim().split(/\s+/).length < 2) return Alert.alert('Confira o nome', 'Informe o nome completo do paciente.');
-      if (digits(cpfOutro).length !== 11) return Alert.alert('Confira o CPF', 'Informe o CPF do paciente.');
-      if (nascimentoOutro.trim().length < 8) return Alert.alert('Confira a data', 'Informe a data de nascimento do paciente.');
+      if (nomeOutro.trim().split(/\s+/).length < 2) {
+        Alert.alert('Confira o nome', 'Informe o nome completo do paciente.');
+        return false;
+      }
+      if (digits(cpfOutro).length !== 11) {
+        Alert.alert('Confira o CPF', 'Informe o CPF do paciente.');
+        return false;
+      }
+      if (nascimentoOutro.trim().length < 8) {
+        Alert.alert('Confira a data', 'Informe a data de nascimento do paciente.');
+        return false;
+      }
     }
-    if (queixa.trim().length < 5) return Alert.alert('Conte um pouco mais', 'Descreva brevemente o que está acontecendo.');
+    if (queixa.trim().length < 5) {
+      Alert.alert('Conte um pouco mais', 'Descreva brevemente o que está acontecendo.');
+      return false;
+    }
+    return true;
+  }
 
-    Alert.alert(
-      'Triagem nativa preparada',
-      'Os dados já estão prontos para a próxima etapa: triagem com IA, pagamento nativo e entrada na mesma fila usada pelo site.',
+  function tratarRetornoTriagem(texto: string, history: TriageMessage[]) {
+    const limpo = String(texto || '').trim();
+    if (!limpo) throw new Error('A triagem não retornou uma resposta.');
+    if (limpo.startsWith('TRIAGEM_CONCLUIDA:')) {
+      const resumo = limpo.replace(/^TRIAGEM_CONCLUIDA:\s*/i, '').trim();
+      setTriagemResumo(resumo || queixa.trim());
+      setPerguntaAtual('');
+      setTriageMessages([...history, { role: 'assistant', content: limpo }]);
+      setEtapaConsulta('pagamento');
+      return;
+    }
+    setPerguntaAtual(limpo);
+    setTriageMessages([...history, { role: 'assistant', content: limpo }]);
+  }
+
+  async function iniciarTriagem() {
+    if (!validarDados()) return;
+    const history: TriageMessage[] = [
+      { role: 'user', content: `Queixa inicial informada pelo paciente: ${queixa.trim()}` },
+    ];
+    setTriagemLoading(true);
+    setEtapaConsulta('triagem');
+    setTriageMessages(history);
+    try {
+      const data = await conversarTriagem(SYSTEM_TRIAGE, history);
+      tratarRetornoTriagem(data.text, history);
+    } catch (error) {
+      setEtapaConsulta('dados');
+      Alert.alert('Não foi possível iniciar a triagem', error instanceof Error ? error.message : 'Tente novamente.');
+    } finally {
+      setTriagemLoading(false);
+    }
+  }
+
+  async function enviarRespostaTriagem() {
+    const resposta = respostaTriagem.trim();
+    if (!resposta || triagemLoading) return;
+    const history: TriageMessage[] = [...triageMessages, { role: 'user', content: resposta }];
+    setRespostaTriagem('');
+    setTriageMessages(history);
+    setTriagemLoading(true);
+    try {
+      const data = await conversarTriagem(SYSTEM_TRIAGE, history);
+      tratarRetornoTriagem(data.text, history);
+    } catch (error) {
+      Alert.alert('Não foi possível continuar', error instanceof Error ? error.message : 'Tente novamente.');
+    } finally {
+      setTriagemLoading(false);
+    }
+  }
+
+  function voltarEtapa() {
+    if (etapaConsulta === 'dados') return onVoltar();
+    if (etapaConsulta === 'triagem') {
+      setEtapaConsulta('dados');
+      setPerguntaAtual('');
+      setTriageMessages([]);
+      setRespostaTriagem('');
+      return;
+    }
+    setEtapaConsulta('triagem');
+  }
+
+  if (etapaConsulta === 'triagem') {
+    const respostasPaciente = triageMessages.filter((m) => m.role === 'user').slice(1);
+    return (
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.pageWrapFlex}>
+            <PageHeader title="Triagem" onVoltar={voltarEtapa} />
+            <View style={styles.triageProgressRow}>
+              <View style={styles.liveDot} />
+              <Text style={styles.triageProgressText}>TRIAGEM RÁPIDA · {Math.min(respostasPaciente.length + 1, 4)}/4</Text>
+            </View>
+            <Text style={styles.pageLead}>Vou fazer poucas perguntas para organizar seu quadro antes do médico.</Text>
+
+            <ScrollView style={styles.triageChat} contentContainerStyle={styles.triageChatContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.patientBubble}><Text style={styles.patientBubbleLabel}>VOCÊ INFORMOU</Text><Text style={styles.patientBubbleText}>{queixa.trim()}</Text></View>
+              {triageMessages.slice(1).map((msg, index) => (
+                msg.role === 'assistant' ? (
+                  <View key={`${index}-${msg.content.slice(0, 8)}`} style={styles.aiBubble}><Text style={styles.aiBubbleLabel}>TRIAGEM</Text><Text style={styles.aiBubbleText}>{msg.content}</Text></View>
+                ) : (
+                  <View key={`${index}-${msg.content.slice(0, 8)}`} style={styles.userBubble}><Text style={styles.userBubbleText}>{msg.content}</Text></View>
+                )
+              ))}
+              {triagemLoading && !perguntaAtual ? <View style={styles.aiBubble}><ActivityIndicator color="#16c783" /></View> : null}
+            </ScrollView>
+
+            <View style={styles.triageComposer}>
+              <TextInput
+                value={respostaTriagem}
+                onChangeText={setRespostaTriagem}
+                placeholder={perguntaAtual || 'Aguarde a próxima pergunta...'}
+                placeholderTextColor="#66736e"
+                style={styles.triageInput}
+                multiline
+                editable={!triagemLoading && !!perguntaAtual}
+                maxLength={700}
+              />
+              <Pressable onPress={enviarRespostaTriagem} disabled={triagemLoading || !respostaTriagem.trim()} style={[styles.sendButton, (triagemLoading || !respostaTriagem.trim()) && styles.sendButtonDisabled]}>
+                {triagemLoading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.sendButtonText}>↑</Text>}
+              </Pressable>
+            </View>
+            {perguntaAtual ? <Text style={styles.currentQuestion}>{perguntaAtual}</Text> : null}
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  if (etapaConsulta === 'pagamento') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.pageWrap}>
+          <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
+          <View style={styles.successBadge}><Text style={styles.successBadgeText}>✓ TRIAGEM CONCLUÍDA</Text></View>
+          <Text style={styles.paymentTitle}>Tudo pronto para seguir.</Text>
+          <Text style={styles.pageLead}>Na próxima etapa, o app vai criar o atendimento e processar PIX ou cartão pelas mesmas APIs usadas no site.</Text>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryCardLabel}>RESUMO PARA O MÉDICO</Text>
+            <Text style={styles.summaryCardText}>{triagemResumo}</Text>
+          </View>
+          <View style={styles.paymentMethodPreview}>
+            <View style={styles.paymentMethodRow}><View><Text style={styles.paymentMethodTitle}>PIX</Text><Text style={styles.paymentMethodText}>QR Code + copia e cola · confirmação automática</Text></View><Text style={styles.chevron}>›</Text></View>
+            <View style={styles.paymentDivider} />
+            <View style={styles.paymentMethodRow}><View><Text style={styles.paymentMethodTitle}>Cartão</Text><Text style={styles.paymentMethodText}>Processamento pela Efí</Text></View><Text style={styles.chevron}>›</Text></View>
+          </View>
+          <View style={styles.profileNotice}><Text style={styles.profileNoticeTitle}>Próximo bloco</Text><Text style={styles.profileNoticeText}>Agora ligaremos esta tela ao PagBank/Efí e, após a confirmação, o paciente entra na mesma fila do painel médico.</Text></View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
-        <PageHeader title="Nova consulta" onVoltar={onVoltar} />
+        <PageHeader title="Nova consulta" onVoltar={voltarEtapa} />
         <Text style={styles.pageLead}>Vamos começar identificando quem será atendido.</Text>
 
         <View style={styles.choiceRow}>
@@ -540,7 +699,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         <TextInput
           value={queixa}
           onChangeText={setQueixa}
-          placeholder="Ex.: dor de garganta, febre desde ontem, preciso renovar uma medicação..."
+          placeholder="Ex.: dor de garganta, febre desde ontem, dor abdominal..."
           placeholderTextColor="#66736e"
           style={[styles.darkInput, styles.textArea]}
           multiline
@@ -551,12 +710,12 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
         <View style={styles.flowPreview}>
           <Text style={styles.flowPreviewTitle}>Como vai funcionar</Text>
-          <FlowRow number="1" title="Triagem rápida" text="Perguntas inteligentes para organizar seu quadro antes do médico." />
-          <FlowRow number="2" title="Pagamento" text="PIX com QR Code ou cartão, dentro do fluxo do app." />
+          <FlowRow number="1" title="Triagem rápida" text="Até 4 perguntas para organizar seu quadro antes do médico." />
+          <FlowRow number="2" title="Pagamento" text="PIX com QR Code ou cartão dentro do fluxo do app." />
           <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem, com envio de fotos e arquivos." last />
         </View>
 
-        <Pressable onPress={continuar} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Continuar para triagem</Text></Pressable>
+        <PrimaryButton label="Continuar para triagem" loading={triagemLoading} onPress={iniciarTriagem} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -680,6 +839,7 @@ const styles = StyleSheet.create({
   refreshText: { color: '#71807b', fontWeight: '700', fontSize: 13 },
 
   pageWrap: { padding: 20, paddingBottom: 50 },
+  pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
   backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', alignItems: 'center', justifyContent: 'center' },
   backText: { color: '#fff', fontSize: 30, lineHeight: 32, marginTop: -3 },
@@ -725,4 +885,35 @@ const styles = StyleSheet.create({
   flowNumberText: { color: '#78f25f', fontSize: 12, fontWeight: '900' },
   flowTitle: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
   flowText: { color: '#8a97a6', fontSize: 12, lineHeight: 17, marginTop: 3 },
+
+  triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -7, marginBottom: 12 },
+  triageProgressText: { color: '#78f25f', fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
+  triageChat: { flex: 1, marginTop: 2 },
+  triageChatContent: { paddingBottom: 18, gap: 11 },
+  patientBubble: { alignSelf: 'stretch', backgroundColor: '#10201d', borderWidth: 1, borderColor: '#21483c', borderRadius: 17, padding: 15 },
+  patientBubbleLabel: { color: '#78f25f', fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 6 },
+  patientBubbleText: { color: '#dce6e2', lineHeight: 20, fontSize: 14 },
+  aiBubble: { alignSelf: 'flex-start', maxWidth: '88%', backgroundColor: '#f7fbf8', borderRadius: 17, borderBottomLeftRadius: 5, padding: 14 },
+  aiBubbleLabel: { color: '#18724f', fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 5 },
+  aiBubbleText: { color: '#26332f', lineHeight: 20, fontSize: 14 },
+  userBubble: { alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: '#16c783', borderRadius: 17, borderBottomRightRadius: 5, paddingHorizontal: 14, paddingVertical: 11 },
+  userBubbleText: { color: '#07100f', lineHeight: 19, fontSize: 14, fontWeight: '600' },
+  triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, borderTopWidth: 1, borderTopColor: '#1d342f', paddingTop: 12 },
+  triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: '#101d1a', borderWidth: 1, borderColor: '#223a34', borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: '#fff', fontSize: 15 },
+  sendButton: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
+  sendButtonDisabled: { opacity: .35 },
+  sendButtonText: { color: '#07100f', fontSize: 24, fontWeight: '900', marginTop: -2 },
+  currentQuestion: { color: '#84908c', fontSize: 11.5, lineHeight: 16, marginTop: 7, paddingHorizontal: 3 },
+
+  successBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 14 },
+  successBadgeText: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .7 },
+  paymentTitle: { color: '#fff', fontSize: 27, fontWeight: '800', letterSpacing: -.5, marginBottom: 11 },
+  summaryCard: { backgroundColor: '#f7fbf8', borderRadius: 18, padding: 17, marginBottom: 16 },
+  summaryCardLabel: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: .8, marginBottom: 8 },
+  summaryCardText: { color: '#34433e', fontSize: 13.5, lineHeight: 20 },
+  paymentMethodPreview: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, paddingHorizontal: 16 },
+  paymentMethodRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17 },
+  paymentMethodTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  paymentMethodText: { color: '#84908c', fontSize: 12, marginTop: 4 },
+  paymentDivider: { height: 1, backgroundColor: '#1d342f' },
 });
