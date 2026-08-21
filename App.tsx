@@ -28,9 +28,17 @@ function formatarTelefone(valor: string) {
   return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7)}`;
 }
 
+function telefoneComPais(valor: string) {
+  const numeros = valor.replace(/\D/g, '');
+  return `+55 ${formatarTelefone(numeros)}`;
+}
+
 export default function App() {
   const [booting, setBooting] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [etapa, setEtapa] = useState<'telefone' | 'codigo'>('telefone');
   const [telefone, setTelefone] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
 
@@ -56,16 +64,46 @@ export default function App() {
     setAgendamentos(agenda.agendamentos || []);
   }
 
-  function continuarComTelefone() {
+  async function continuarComTelefone() {
     const numeros = telefone.replace(/\D/g, '');
     if (numeros.length < 10) {
       Alert.alert('Confira o celular', 'Digite um número de celular válido com DDD.');
       return;
     }
 
+    setLoading(true);
+    try {
+      // A chamada real para solicitar o OTP será conectada ao backend nesta etapa.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setCodigo('');
+      setEtapa('codigo');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmarCodigo() {
+    const numeros = codigo.replace(/\D/g, '');
+    if (numeros.length !== 6) {
+      Alert.alert('Confira o código', 'Digite os 6 dígitos do código de acesso.');
+      return;
+    }
+
     Alert.alert(
-      'Próxima etapa',
-      'Agora vamos conectar este número ao cadastro existente e enviar o código de acesso.',
+      'Fluxo pronto',
+      'A tela de verificação já está funcionando. O próximo passo é conectar a validação do código ao backend.',
+    );
+  }
+
+  function alterarNumero() {
+    setCodigo('');
+    setEtapa('telefone');
+  }
+
+  function reenviarCodigo() {
+    Alert.alert(
+      'Reenvio',
+      'O reenvio real será habilitado quando conectarmos o OTP ao backend.',
     );
   }
 
@@ -74,6 +112,8 @@ export default function App() {
     setPaciente(null);
     setAgendamentos([]);
     setTelefone('');
+    setCodigo('');
+    setEtapa('telefone');
   }
 
   if (booting) {
@@ -96,41 +136,96 @@ export default function App() {
             <Text style={styles.subtitle}>Sua saúde, no seu tempo.</Text>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>ACESSO DO PACIENTE</Text>
+          {etapa === 'telefone' ? (
+            <>
+              <View style={styles.card}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>ACESSO DO PACIENTE</Text>
+                </View>
+
+                <Text style={styles.cardTitle}>Entre com seu celular</Text>
+                <Text style={styles.cardSubtitle}>
+                  Use o número informado nas suas consultas. Se você já for paciente, reconheceremos seu cadastro automaticamente.
+                </Text>
+
+                <Text style={styles.inputLabel}>Número de celular</Text>
+                <View style={styles.phoneRow}>
+                  <View style={styles.countryBox}>
+                    <Text style={styles.countryText}>+55</Text>
+                  </View>
+                  <TextInput
+                    value={telefone}
+                    onChangeText={(valor) => setTelefone(formatarTelefone(valor))}
+                    placeholder="(98) 99999-9999"
+                    placeholderTextColor="#94a09c"
+                    keyboardType="phone-pad"
+                    autoComplete="tel"
+                    textContentType="telephoneNumber"
+                    style={[styles.input, styles.phoneInput]}
+                    maxLength={15}
+                  />
+                </View>
+
+                <Pressable
+                  onPress={continuarComTelefone}
+                  disabled={loading}
+                  style={[styles.primaryButton, loading && styles.buttonLoading]}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#07100f" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Continuar</Text>
+                  )}
+                </Pressable>
+
+                <Text style={styles.privacyText}>
+                  Ao continuar, você confirma que este número pertence a você ou está autorizado a utilizá-lo para acessar seus atendimentos.
+                </Text>
+              </View>
+
+              <Text style={styles.helperText}>
+                Primeiro acesso? Se o número ainda não estiver vinculado, completaremos seus dados na próxima etapa.
+              </Text>
+            </>
+          ) : (
+            <View style={styles.card}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>VERIFICAÇÃO</Text>
+              </View>
+
+              <Text style={styles.cardTitle}>Digite o código</Text>
+              <Text style={styles.cardSubtitle}>
+                Use o código de 6 dígitos enviado para {telefoneComPais(telefone)}.
+              </Text>
+
+              <Text style={styles.inputLabel}>Código de acesso</Text>
+              <TextInput
+                value={codigo}
+                onChangeText={(valor) => setCodigo(valor.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                placeholderTextColor="#aeb8b4"
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                style={[styles.input, styles.codeInput]}
+                maxLength={6}
+              />
+
+              <Pressable onPress={confirmarCodigo} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Entrar</Text>
+              </Pressable>
+
+              <View style={styles.secondaryActions}>
+                <Pressable onPress={reenviarCodigo}>
+                  <Text style={styles.secondaryActionText}>Reenviar código</Text>
+                </Pressable>
+                <View style={styles.actionDivider} />
+                <Pressable onPress={alterarNumero}>
+                  <Text style={styles.secondaryActionText}>Alterar número</Text>
+                </Pressable>
+              </View>
             </View>
-
-            <Text style={styles.cardTitle}>Entre com seu celular</Text>
-            <Text style={styles.cardSubtitle}>
-              Use o número informado nas suas consultas. Vamos reconhecer seu cadastro sem você precisar preencher tudo novamente.
-            </Text>
-
-            <Text style={styles.inputLabel}>Número de celular</Text>
-            <TextInput
-              value={telefone}
-              onChangeText={(valor) => setTelefone(formatarTelefone(valor))}
-              placeholder="(98) 99999-9999"
-              placeholderTextColor="#94a09c"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              textContentType="telephoneNumber"
-              style={styles.input}
-              maxLength={15}
-            />
-
-            <Pressable onPress={continuarComTelefone} style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Continuar</Text>
-            </Pressable>
-
-            <Text style={styles.privacyText}>
-              Ao continuar, você confirma que este número pertence a você ou está autorizado a utilizá-lo para acessar seus atendimentos.
-            </Text>
-          </View>
-
-          <Text style={styles.helperText}>
-            Primeiro acesso? Se o número ainda não estiver vinculado, completaremos seus dados na próxima etapa.
-          </Text>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
@@ -228,6 +323,26 @@ const styles = StyleSheet.create({
     color: '#14201d',
     fontSize: 17,
   },
+  phoneRow: { flexDirection: 'row', gap: 8 },
+  countryBox: {
+    minWidth: 58,
+    height: 54,
+    borderWidth: 1,
+    borderColor: '#dfe9e3',
+    borderRadius: 14,
+    backgroundColor: '#eef7f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countryText: { color: '#25322e', fontSize: 16, fontWeight: '700' },
+  phoneInput: { flex: 1, height: 54 },
+  codeInput: {
+    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 10,
+    paddingLeft: 24,
+  },
   primaryButton: {
     minHeight: 52,
     backgroundColor: '#16c783',
@@ -236,6 +351,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 4,
   },
+  buttonLoading: { opacity: 0.75 },
   primaryButtonText: { color: '#07100f', fontSize: 16, fontWeight: '800' },
   privacyText: { color: '#84908c', fontSize: 11.5, lineHeight: 17, marginTop: 14 },
   helperText: {
@@ -246,6 +362,14 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 16,
   },
+  secondaryActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  secondaryActionText: { color: '#0b8f61', fontSize: 13, fontWeight: '700' },
+  actionDivider: { width: 1, height: 14, backgroundColor: '#dfe9e3', marginHorizontal: 13 },
   disabledButton: { opacity: 0.55, marginTop: 18 },
   home: { padding: 20, paddingBottom: 50 },
   topbar: {
