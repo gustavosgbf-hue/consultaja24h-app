@@ -106,6 +106,17 @@ export type AtendimentoEmAndamento = {
   etapa: 'pagamento' | 'triagem' | 'fila' | 'chat';
 };
 
+export type MensagemChat = {
+  id: number;
+  atendimento_id: number;
+  autor: 'paciente' | 'medico';
+  texto: string;
+  arquivo_url?: string | null;
+  arquivo_tipo?: string | null;
+  arquivo_nome?: string | null;
+  criado_em: string;
+};
+
 export type TriageMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -154,6 +165,22 @@ export async function carregarAtendimentoEmAndamento() {
   return authenticatedFetch<{ ok: boolean; atendimento: AtendimentoEmAndamento | null }>('/api/paciente/atendimento-em-andamento');
 }
 
+export async function carregarChatPaciente(atendimentoId: number) {
+  return authenticatedFetch<{
+    ok: boolean;
+    atendimento: { id: number; status?: string | null; medico_nome?: string | null; etapa?: AtendimentoEmAndamento['etapa'] };
+    mensagens: MensagemChat[];
+  }>(`/api/paciente/atendimento/${encodeURIComponent(String(atendimentoId))}/chat`);
+}
+
+export async function enviarMensagemChatPaciente(atendimentoId: number, texto: string) {
+  return postJson<{ ok: boolean; mensagem: MensagemChat }>(
+    `/api/paciente/atendimento/${encodeURIComponent(String(atendimentoId))}/chat`,
+    { texto },
+    true,
+  );
+}
+
 export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
   return postJson<IniciarAtendimentoResponse>('/api/notify', {
     nome: input.nome,
@@ -180,6 +207,18 @@ export async function atualizarAtendimento(atendimentoId: number, input: Iniciar
     email: input.email || '',
     atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
     origem: 'app_paciente',
+  });
+}
+
+export async function concluirTriagemAtendimento(atendimentoId: number, input: IniciarAtendimentoInput) {
+  return postJson<{ ok: boolean; atendimentoId: number }>('/api/atendimento/atualizar-triagem', {
+    atendimentoId,
+    nome: input.nome,
+    tel: input.telefone,
+    cpf: input.cpf,
+    triagem: input.triagem,
+    data_nascimento: input.dataNascimento || '',
+    email: input.email || '',
   });
 }
 
@@ -245,5 +284,5 @@ export async function consultarStatusPix(orderId: string) {
 
 export async function consultarStatusAtendimento(atendimentoId: number) {
   const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}`);
-  return parseJson<{ ok: boolean; atendimento?: { pagamento_status?: string; status?: string } }>(response);
+  return parseJson<{ ok: boolean; atendimento?: { pagamento_status?: string; status?: string; medico_nome?: string | null }; fila?: { posicao?: number; total?: number } }>(response);
 }
