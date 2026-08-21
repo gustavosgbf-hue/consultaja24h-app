@@ -81,6 +81,31 @@ export type CobrarCartaoResponse = {
   status?: string;
 };
 
+export type AtendimentoEmAndamento = {
+  id: number;
+  nome?: string | null;
+  cpf?: string | null;
+  tel?: string | null;
+  email?: string | null;
+  data_nascimento?: string | null;
+  tipo?: string | null;
+  status?: string | null;
+  pagamento_status?: string | null;
+  pagamento_metodo?: string | null;
+  pagamento_confirmado_em?: string | null;
+  pagbank_order_id?: string | null;
+  pagbank_qr_text?: string | null;
+  pagbank_qr_expira_em?: string | null;
+  efi_charge_id?: string | null;
+  triagem?: string | null;
+  queixa?: string | null;
+  atendimento_para_terceiro?: boolean | null;
+  medico_id?: number | null;
+  medico_nome?: string | null;
+  criado_em?: string | null;
+  etapa: 'pagamento' | 'triagem' | 'fila' | 'chat';
+};
+
 export type TriageMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -123,6 +148,10 @@ export async function carregarAgendamentos() {
 
 export async function carregarHistoricoPaciente() {
   return authenticatedFetch<{ ok: boolean; atendimentos: AtendimentoHistorico[] }>('/api/paciente/historico');
+}
+
+export async function carregarAtendimentoEmAndamento() {
+  return authenticatedFetch<{ ok: boolean; atendimento: AtendimentoEmAndamento | null }>('/api/paciente/atendimento-em-andamento');
 }
 
 export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
