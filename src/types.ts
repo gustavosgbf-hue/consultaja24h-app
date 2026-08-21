@@ -19,6 +19,15 @@ export type Agendamento = {
   link_sessao?: string | null;
 };
 
+export type AtendimentoHistorico = {
+  id: number;
+  profissional_nome: string;
+  tipo?: string | null;
+  status?: string | null;
+  resumo?: string | null;
+  data_atendimento: string;
+};
+
 export type LoginResponse = {
   ok: boolean;
   token?: string;
