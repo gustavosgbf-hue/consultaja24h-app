@@ -35,7 +35,7 @@ export default function EfiCardForm({ holderName, holderDocument, disabled, onTo
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <script src="https://cdn.jsdelivr.net/gh/efipay/js-payment-token-efi/dist/payment-token-efi-umd.min.js"></script>
 <style>
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:#0b1715;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding:2px}.field{margin-bottom:11px}.label{display:block;color:#d6dfdb;font-size:12px;font-weight:700;margin-bottom:6px}.input{width:100%;height:48px;border:1px solid #223a34;border-radius:13px;background:#101d1a;color:#fff;padding:0 13px;font-size:16px;outline:none}.input:focus{border-color:#16c783}.row{display:flex;gap:9px}.row .field{flex:1}.button{width:100%;height:52px;border:0;border-radius:14px;background:#16c783;color:#07100f;font-size:16px;font-weight:800;margin-top:3px}.button:disabled{opacity:.5}.hint{color:#71807b;font-size:11px;line-height:16px;text-align:center;margin:10px 8px 0}.error{display:none;color:#ff9ca5;font-size:12px;line-height:17px;margin:0 2px 10px}.error.show{display:block}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#0b1715;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding:2px}.field{margin-bottom:11px}.label{display:block;color:#d6dfdb;font-size:12px;font-weight:700;margin-bottom:6px}.input{width:100%;height:48px;border:1px solid #223a34;border-radius:13px;background:#101d1a;color:#fff;padding:0 13px;font-size:16px;outline:none}.input:focus{border-color:#16c783}.row{display:flex;gap:9px}.row .field{flex:1}.button{width:100%;height:52px;border:0;border-radius:14px;background:#16c783;color:#07100f;font-size:16px;font-weight:800;margin-top:3px;display:flex;align-items:center;justify-content:center;line-height:20px;padding:0 16px}.button:disabled{opacity:.5}.hint{color:#71807b;font-size:11px;line-height:16px;text-align:center;margin:10px 8px 0}.error{display:none;color:#ff9ca5;font-size:12px;line-height:17px;margin:0 2px 10px}.error.show{display:block}
 </style>
 </head>
 <body>
@@ -143,7 +143,7 @@ window.addEventListener('message',e=>{if(e.data==='reset'){const b=$('pay');b.di
 }
 
 const styles = StyleSheet.create({
-  wrap: { height: 355, overflow: 'hidden', borderRadius: 14, backgroundColor: '#0b1715' },
+  wrap: { height: 410, overflow: 'hidden', borderRadius: 14, backgroundColor: '#0b1715' },
   webview: { flex: 1, backgroundColor: '#0b1715' },
   disabled: { opacity: 0.6 },
 });
