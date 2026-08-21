@@ -75,6 +75,12 @@ export type StatusPagBankResponse = {
   status?: string;
 };
 
+export type CobrarCartaoResponse = {
+  ok: boolean;
+  charge_id?: string | number;
+  status?: string;
+};
+
 export type TriageMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -162,6 +168,34 @@ export async function gerarPixConsulta(args: {
     nome: args.pagadorNome,
     cpf: args.pagadorCpf,
     email: args.pagadorEmail || undefined,
+    paciente_nome: args.pacienteNome,
+    paciente_cpf: args.pacienteCpf,
+    atendimento_para_terceiro: !!args.atendimentoParaTerceiro,
+  });
+}
+
+export async function cobrarCartaoConsulta(args: {
+  atendimentoId: number;
+  paymentToken: string;
+  pagadorNome: string;
+  pagadorCpf: string;
+  pagadorEmail: string;
+  telefone: string;
+  nascimento?: string;
+  parcelas?: number;
+  pacienteNome: string;
+  pacienteCpf: string;
+  atendimentoParaTerceiro?: boolean;
+}) {
+  return postJson<CobrarCartaoResponse>('/api/efi/cartao/cobrar', {
+    payment_token: args.paymentToken,
+    nome: args.pagadorNome,
+    cpf: args.pagadorCpf,
+    email: args.pagadorEmail,
+    telefone: args.telefone,
+    nascimento: args.nascimento || '',
+    parcelas: args.parcelas || 1,
+    atendimentoId: args.atendimentoId,
     paciente_nome: args.pacienteNome,
     paciente_cpf: args.pacienteCpf,
     atendimento_para_terceiro: !!args.atendimentoParaTerceiro,
