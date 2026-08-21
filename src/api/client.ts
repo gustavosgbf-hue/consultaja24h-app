@@ -195,21 +195,6 @@ export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
   });
 }
 
-export async function atualizarAtendimento(atendimentoId: number, input: IniciarAtendimentoInput) {
-  return postJson<IniciarAtendimentoResponse>('/api/notify', {
-    atendimentoId,
-    nome: input.nome,
-    tel: input.telefone,
-    cpf: input.cpf,
-    triagem: input.triagem,
-    tipo: 'chat',
-    data_nascimento: input.dataNascimento || '',
-    email: input.email || '',
-    atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
-    origem: 'app_paciente',
-  });
-}
-
 export async function concluirTriagemAtendimento(atendimentoId: number, input: IniciarAtendimentoInput) {
   return postJson<{ ok: boolean; atendimentoId: number }>('/api/atendimento/atualizar-triagem', {
     atendimentoId,
@@ -220,6 +205,12 @@ export async function concluirTriagemAtendimento(atendimentoId: number, input: I
     data_nascimento: input.dataNascimento || '',
     email: input.email || '',
   });
+}
+
+// Compatibilidade com o App atual: concluirTriagem ainda chama atualizarAtendimento.
+// Internamente usamos a rota que realmente libera o atendimento para a fila médica.
+export async function atualizarAtendimento(atendimentoId: number, input: IniciarAtendimentoInput) {
+  return concluirTriagemAtendimento(atendimentoId, input);
 }
 
 export async function gerarPixConsulta(args: {
@@ -284,5 +275,17 @@ export async function consultarStatusPix(orderId: string) {
 
 export async function consultarStatusAtendimento(atendimentoId: number) {
   const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}`);
-  return parseJson<{ ok: boolean; atendimento?: { pagamento_status?: string; status?: string; medico_nome?: string | null }; fila?: { posicao?: number; total?: number } }>(response);
+  return parseJson<{
+    ok: boolean;
+    atendimento?: {
+      id?: number;
+      pagamento_status?: string;
+      status?: string;
+      medico_id?: number | null;
+      medico_nome?: string | null;
+      tipo?: string | null;
+      encerrado_em?: string | null;
+    };
+    fila?: { posicao?: number; total?: number };
+  }>(response);
 }
