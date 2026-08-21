@@ -27,6 +27,7 @@ import {
   getSessionToken,
   saveSessionToken,
 } from './src/auth/session';
+import PagamentoConsulta from './src/components/PagamentoConsulta';
 import type { Agendamento, AtendimentoHistorico, Paciente } from './src/types';
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
@@ -43,7 +44,7 @@ Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunt
 
 type Tela = 'home' | 'perfil' | 'nova-consulta';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
-type EtapaConsulta = 'dados' | 'triagem' | 'pagamento';
+type EtapaConsulta = 'dados' | 'triagem' | 'pagamento' | 'fila';
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -511,6 +512,11 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   const [respostaTriagem, setRespostaTriagem] = useState('');
   const [triagemResumo, setTriagemResumo] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
+  const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
+
+  const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
+  const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
+  const pacienteNascimentoSelecionado = para === 'outra-pessoa' ? nascimentoOutro.trim() : undefined;
 
   function validarDados() {
     if (para === 'outra-pessoa') {
@@ -526,6 +532,9 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         Alert.alert('Confira a data', 'Informe a data de nascimento do paciente.');
         return false;
       }
+    } else if (digits(paciente.cpf).length !== 11) {
+      Alert.alert('CPF não encontrado', 'Seu cadastro precisa ter um CPF válido antes de iniciar a consulta.');
+      return false;
     }
     if (queixa.trim().length < 5) {
       Alert.alert('Conte um pouco mais', 'Descreva brevemente o que está acontecendo.');
@@ -587,6 +596,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
   function voltarEtapa() {
     if (etapaConsulta === 'dados') return onVoltar();
+    if (etapaConsulta === 'fila') return onVoltar();
     if (etapaConsulta === 'triagem') {
       setEtapaConsulta('dados');
       setPerguntaAtual('');
@@ -647,21 +657,42 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   if (etapaConsulta === 'pagamento') {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.pageWrap}>
+        <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
           <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
-          <View style={styles.successBadge}><Text style={styles.successBadgeText}>✓ TRIAGEM CONCLUÍDA</Text></View>
-          <Text style={styles.paymentTitle}>Tudo pronto para seguir.</Text>
-          <Text style={styles.pageLead}>Na próxima etapa, o app vai criar o atendimento e processar PIX ou cartão pelas mesmas APIs usadas no site.</Text>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryCardLabel}>RESUMO PARA O MÉDICO</Text>
-            <Text style={styles.summaryCardText}>{triagemResumo}</Text>
+          <PagamentoConsulta
+            pacienteLogado={paciente}
+            atendimentoParaTerceiro={para === 'outra-pessoa'}
+            pacienteNome={pacienteNomeSelecionado}
+            pacienteCpf={pacienteCpfSelecionado}
+            pacienteNascimento={pacienteNascimentoSelecionado}
+            triagemResumo={triagemResumo || queixa.trim()}
+            onVoltar={voltarEtapa}
+            onPagamentoConfirmado={(id) => {
+              setAtendimentoPagoId(id);
+              setEtapaConsulta('fila');
+            }}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (etapaConsulta === 'fila') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.pageWrap}>
+          <PageHeader title="Atendimento" onVoltar={onVoltar} />
+          <View style={styles.queueHero}>
+            <View style={styles.queueCheck}><Text style={styles.queueCheckText}>✓</Text></View>
+            <Text style={styles.queueTitle}>Pagamento confirmado</Text>
+            <Text style={styles.queueText}>Seu atendimento já foi encaminhado para a fila médica. O próximo bloco vai trazer esta etapa para o chat dentro do próprio app.</Text>
           </View>
-          <View style={styles.paymentMethodPreview}>
-            <View style={styles.paymentMethodRow}><View><Text style={styles.paymentMethodTitle}>PIX</Text><Text style={styles.paymentMethodText}>QR Code + copia e cola · confirmação automática</Text></View><Text style={styles.chevron}>›</Text></View>
-            <View style={styles.paymentDivider} />
-            <View style={styles.paymentMethodRow}><View><Text style={styles.paymentMethodTitle}>Cartão</Text><Text style={styles.paymentMethodText}>Processamento pela Efí</Text></View><Text style={styles.chevron}>›</Text></View>
+          <View style={styles.queueCard}>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.queueKicker}>ATENDIMENTO #{atendimentoPagoId || ''}</Text></View>
+            <Text style={styles.queueCardTitle}>Aguardando médico</Text>
+            <Text style={styles.queueCardText}>Você não precisa gerar outro pagamento. Este atendimento já está registrado no mesmo sistema usado pelo painel profissional.</Text>
           </View>
-          <View style={styles.profileNotice}><Text style={styles.profileNoticeTitle}>Próximo bloco</Text><Text style={styles.profileNoticeText}>Agora ligaremos esta tela ao PagBank/Efí e, após a confirmação, o paciente entra na mesma fila do painel médico.</Text></View>
+          <PrimaryButton label="Voltar ao início" loading={false} onPress={onVoltar} />
         </ScrollView>
       </SafeAreaView>
     );
@@ -905,15 +936,13 @@ const styles = StyleSheet.create({
   sendButtonText: { color: '#07100f', fontSize: 24, fontWeight: '900', marginTop: -2 },
   currentQuestion: { color: '#84908c', fontSize: 11.5, lineHeight: 16, marginTop: 7, paddingHorizontal: 3 },
 
-  successBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 14 },
-  successBadgeText: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .7 },
-  paymentTitle: { color: '#fff', fontSize: 27, fontWeight: '800', letterSpacing: -.5, marginBottom: 11 },
-  summaryCard: { backgroundColor: '#f7fbf8', borderRadius: 18, padding: 17, marginBottom: 16 },
-  summaryCardLabel: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: .8, marginBottom: 8 },
-  summaryCardText: { color: '#34433e', fontSize: 13.5, lineHeight: 20 },
-  paymentMethodPreview: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, paddingHorizontal: 16 },
-  paymentMethodRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17 },
-  paymentMethodTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  paymentMethodText: { color: '#84908c', fontSize: 12, marginTop: 4 },
-  paymentDivider: { height: 1, backgroundColor: '#1d342f' },
+  queueHero: { alignItems: 'center', paddingVertical: 22, paddingHorizontal: 8 },
+  queueCheck: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', alignItems: 'center', justifyContent: 'center' },
+  queueCheckText: { color: '#78f25f', fontSize: 31, fontWeight: '900' },
+  queueTitle: { color: '#fff', fontSize: 25, fontWeight: '900', marginTop: 15 },
+  queueText: { color: '#a9b5b0', fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8 },
+  queueCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#285746', borderRadius: 18, padding: 17, marginBottom: 15 },
+  queueKicker: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .8 },
+  queueCardTitle: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 12 },
+  queueCardText: { color: '#8a97a6', fontSize: 12.5, lineHeight: 19, marginTop: 6 },
 });
