@@ -22,10 +22,13 @@ export type Agendamento = {
 export type AtendimentoHistorico = {
   id: number;
   profissional_nome: string;
+  medico_nome?: string | null;
   tipo?: string | null;
   status?: string | null;
   resumo?: string | null;
+  triagem?: string | null;
   data_atendimento: string;
+  criado_em?: string | null;
 };
 
 export type LoginResponse = {
