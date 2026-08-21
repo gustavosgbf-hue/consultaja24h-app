@@ -1,5 +1,5 @@
 import { getSessionToken } from '../auth/session';
-import type { Agendamento, LoginResponse, Paciente } from '../types';
+import type { Agendamento, Paciente } from '../types';
 
 const API_BASE_URL = 'https://triagem-api.onrender.com';
 
@@ -12,13 +12,36 @@ async function parseJson<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-export async function loginPaciente(email: string, senha: string) {
-  const response = await fetch(`${API_BASE_URL}/api/paciente/login`, {
+export type SolicitarOtpResponse = {
+  ok: boolean;
+  precisa_dados?: boolean;
+  precisa_cpf?: boolean;
+  challenge_id?: string;
+  email_mascarado?: string;
+};
+
+export type VerificarOtpResponse = {
+  ok: boolean;
+  token: string;
+  paciente: Paciente;
+};
+
+export async function solicitarOtpPaciente(telefone: string, email?: string, cpf?: string) {
+  const response = await fetch(`${API_BASE_URL}/api/paciente/otp/solicitar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, senha }),
+    body: JSON.stringify({ telefone, email, cpf }),
   });
-  return parseJson<LoginResponse>(response);
+  return parseJson<SolicitarOtpResponse>(response);
+}
+
+export async function verificarOtpPaciente(challengeId: string, codigo: string) {
+  const response = await fetch(`${API_BASE_URL}/api/paciente/otp/verificar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ challenge_id: challengeId, codigo }),
+  });
+  return parseJson<VerificarOtpResponse>(response);
 }
 
 async function authenticatedFetch<T>(path: string): Promise<T> {
