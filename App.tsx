@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import {
+  atualizarAtendimento,
   carregarAgendamentos,
   carregarHistoricoPaciente,
   carregarPaciente,
@@ -44,7 +45,7 @@ Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunt
 
 type Tela = 'home' | 'perfil' | 'nova-consulta';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
-type EtapaConsulta = 'dados' | 'triagem' | 'pagamento' | 'fila';
+type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -407,7 +408,7 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
         <View style={styles.heroCard}>
           <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.heroEyebrow}>MÉDICO ONLINE</Text></View>
           <Text style={styles.heroTitle}>Atendimento por chat, sem precisar sair de casa.</Text>
-          <Text style={styles.heroText}>Você faz a triagem, paga e entra na fila. O atendimento acontecerá pelo próprio app.</Text>
+          <Text style={styles.heroText}>Você paga, faz uma triagem rápida e entra na fila. O atendimento acontecerá pelo próprio app.</Text>
           <Pressable onPress={onNovaConsulta} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Consultar agora</Text></Pressable>
         </View>
 
@@ -438,7 +439,7 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
             <View key={String(item.id)} style={styles.historyCard}>
               <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>
                 <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>
-                <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>
+                <Text style={styles.historyMeta}>{formatarData(ultimo.criado_em)} · {item.tipo || 'chat'}</Text>
                 <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>
               </View></View>
             </View>
@@ -517,6 +518,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
   const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
   const pacienteNascimentoSelecionado = para === 'outra-pessoa' ? nascimentoOutro.trim() : undefined;
+  const telefoneContato = digits(paciente.tel);
 
   function validarDados() {
     if (para === 'outra-pessoa') {
@@ -543,50 +545,77 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     return true;
   }
 
-  function tratarRetornoTriagem(texto: string, history: TriageMessage[]) {
-    const limpo = String(texto || '').trim();
-    if (!limpo) throw new Error('A triagem não retornou uma resposta.');
-    if (limpo.startsWith('TRIAGEM_CONCLUIDA:')) {
-      const resumo = limpo.replace(/^TRIAGEM_CONCLUIDA:\s*/i, '').trim();
-      setTriagemResumo(resumo || queixa.trim());
-      setPerguntaAtual('');
-      setTriageMessages([...history, { role: 'assistant', content: limpo }]);
-      setEtapaConsulta('pagamento');
-      return;
-    }
-    setPerguntaAtual(limpo);
-    setTriageMessages([...history, { role: 'assistant', content: limpo }]);
+  function irParaPagamento() {
+    if (!validarDados()) return;
+    setEtapaConsulta('pagamento');
   }
 
-  async function iniciarTriagem() {
-    if (!validarDados()) return;
+  async function iniciarTriagemAposPagamento(atendimentoId: number) {
+    setAtendimentoPagoId(atendimentoId);
     const history: TriageMessage[] = [
       { role: 'user', content: `Queixa inicial informada pelo paciente: ${queixa.trim()}` },
     ];
     setTriagemLoading(true);
     setEtapaConsulta('triagem');
     setTriageMessages(history);
+    setPerguntaAtual('');
+    setRespostaTriagem('');
     try {
       const data = await conversarTriagem(SYSTEM_TRIAGE, history);
-      tratarRetornoTriagem(data.text, history);
+      await tratarRetornoTriagem(data.text, history, atendimentoId);
     } catch (error) {
-      setEtapaConsulta('dados');
-      Alert.alert('Não foi possível iniciar a triagem', error instanceof Error ? error.message : 'Tente novamente.');
+      Alert.alert('Pagamento confirmado', 'O pagamento foi confirmado, mas não conseguimos iniciar a triagem agora. Tente novamente em instantes.');
     } finally {
       setTriagemLoading(false);
     }
   }
 
+  async function concluirTriagem(resumo: string, history: TriageMessage[], atendimentoId: number) {
+    setTriagemResumo(resumo || queixa.trim());
+    setPerguntaAtual('');
+    setTriageMessages([...history, { role: 'assistant', content: `TRIAGEM_CONCLUIDA: ${resumo}` }]);
+    setTriagemLoading(true);
+    try {
+      await atualizarAtendimento(atendimentoId, {
+        nome: pacienteNomeSelecionado,
+        telefone: telefoneContato,
+        cpf: pacienteCpfSelecionado,
+        email: paciente.email || undefined,
+        dataNascimento: pacienteNascimentoSelecionado,
+        triagem: resumo || queixa.trim(),
+        atendimentoParaTerceiro: para === 'outra-pessoa',
+      });
+      setEtapaConsulta('fila');
+    } catch (error) {
+      Alert.alert('Triagem concluída', 'A triagem terminou, mas não conseguimos salvar o resumo no atendimento. Tente novamente.');
+    } finally {
+      setTriagemLoading(false);
+    }
+  }
+
+  async function tratarRetornoTriagem(texto: string, history: TriageMessage[], atendimentoId = atendimentoPagoId) {
+    const limpo = String(texto || '').trim();
+    if (!limpo) throw new Error('A triagem não retornou uma resposta.');
+    if (limpo.startsWith('TRIAGEM_CONCLUIDA:')) {
+      if (!atendimentoId) throw new Error('Atendimento pago não encontrado.');
+      const resumo = limpo.replace(/^TRIAGEM_CONCLUIDA:\s*/i, '').trim();
+      await concluirTriagem(resumo || queixa.trim(), history, atendimentoId);
+      return;
+    }
+    setPerguntaAtual(limpo);
+    setTriageMessages([...history, { role: 'assistant', content: limpo }]);
+  }
+
   async function enviarRespostaTriagem() {
     const resposta = respostaTriagem.trim();
-    if (!resposta || triagemLoading) return;
+    if (!resposta || triagemLoading || !atendimentoPagoId) return;
     const history: TriageMessage[] = [...triageMessages, { role: 'user', content: resposta }];
     setRespostaTriagem('');
     setTriageMessages(history);
     setTriagemLoading(true);
     try {
       const data = await conversarTriagem(SYSTEM_TRIAGE, history);
-      tratarRetornoTriagem(data.text, history);
+      await tratarRetornoTriagem(data.text, history, atendimentoPagoId);
     } catch (error) {
       Alert.alert('Não foi possível continuar', error instanceof Error ? error.message : 'Tente novamente.');
     } finally {
@@ -596,15 +625,30 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
   function voltarEtapa() {
     if (etapaConsulta === 'dados') return onVoltar();
+    if (etapaConsulta === 'pagamento') return setEtapaConsulta('dados');
     if (etapaConsulta === 'fila') return onVoltar();
     if (etapaConsulta === 'triagem') {
-      setEtapaConsulta('dados');
-      setPerguntaAtual('');
-      setTriageMessages([]);
-      setRespostaTriagem('');
-      return;
+      Alert.alert('Pagamento já confirmado', 'Conclua a triagem para seguir ao atendimento.');
     }
-    setEtapaConsulta('triagem');
+  }
+
+  if (etapaConsulta === 'pagamento') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
+          <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
+          <PagamentoConsulta
+            pacienteLogado={paciente}
+            atendimentoParaTerceiro={para === 'outra-pessoa'}
+            pacienteNome={pacienteNomeSelecionado}
+            pacienteCpf={pacienteCpfSelecionado}
+            pacienteNascimento={pacienteNascimentoSelecionado}
+            onVoltar={voltarEtapa}
+            onPagamentoConfirmado={iniciarTriagemAposPagamento}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   if (etapaConsulta === 'triagem') {
@@ -614,11 +658,12 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.pageWrapFlex}>
             <PageHeader title="Triagem" onVoltar={voltarEtapa} />
+            <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ PAGAMENTO CONFIRMADO</Text></View>
             <View style={styles.triageProgressRow}>
               <View style={styles.liveDot} />
               <Text style={styles.triageProgressText}>TRIAGEM RÁPIDA · {Math.min(respostasPaciente.length + 1, 4)}/4</Text>
             </View>
-            <Text style={styles.pageLead}>Vou fazer poucas perguntas para organizar seu quadro antes do médico.</Text>
+            <Text style={styles.pageLead}>Só mais algumas perguntas para organizar seu quadro antes do médico.</Text>
 
             <ScrollView style={styles.triageChat} contentContainerStyle={styles.triageChatContent} keyboardShouldPersistTaps="handled">
               <View style={styles.patientBubble}><Text style={styles.patientBubbleLabel}>VOCÊ INFORMOU</Text><Text style={styles.patientBubbleText}>{queixa.trim()}</Text></View>
@@ -654,29 +699,6 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     );
   }
 
-  if (etapaConsulta === 'pagamento') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
-          <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
-          <PagamentoConsulta
-            pacienteLogado={paciente}
-            atendimentoParaTerceiro={para === 'outra-pessoa'}
-            pacienteNome={pacienteNomeSelecionado}
-            pacienteCpf={pacienteCpfSelecionado}
-            pacienteNascimento={pacienteNascimentoSelecionado}
-            triagemResumo={triagemResumo || queixa.trim()}
-            onVoltar={voltarEtapa}
-            onPagamentoConfirmado={(id) => {
-              setAtendimentoPagoId(id);
-              setEtapaConsulta('fila');
-            }}
-          />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
   if (etapaConsulta === 'fila') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -684,13 +706,13 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
           <PageHeader title="Atendimento" onVoltar={onVoltar} />
           <View style={styles.queueHero}>
             <View style={styles.queueCheck}><Text style={styles.queueCheckText}>✓</Text></View>
-            <Text style={styles.queueTitle}>Pagamento confirmado</Text>
-            <Text style={styles.queueText}>Seu atendimento já foi encaminhado para a fila médica. O próximo bloco vai trazer esta etapa para o chat dentro do próprio app.</Text>
+            <Text style={styles.queueTitle}>Tudo pronto</Text>
+            <Text style={styles.queueText}>Pagamento confirmado e triagem concluída. Seu atendimento já pode seguir para a fila médica.</Text>
           </View>
           <View style={styles.queueCard}>
             <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.queueKicker}>ATENDIMENTO #{atendimentoPagoId || ''}</Text></View>
             <Text style={styles.queueCardTitle}>Aguardando médico</Text>
-            <Text style={styles.queueCardText}>Você não precisa gerar outro pagamento. Este atendimento já está registrado no mesmo sistema usado pelo painel profissional.</Text>
+            <Text style={styles.queueCardText}>Este é o mesmo ID usado no painel profissional. Você não precisa gerar outro pagamento nem repetir a triagem.</Text>
           </View>
           <PrimaryButton label="Voltar ao início" loading={false} onPress={onVoltar} />
         </ScrollView>
@@ -741,12 +763,12 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
         <View style={styles.flowPreview}>
           <Text style={styles.flowPreviewTitle}>Como vai funcionar</Text>
-          <FlowRow number="1" title="Triagem rápida" text="Até 4 perguntas para organizar seu quadro antes do médico." />
-          <FlowRow number="2" title="Pagamento" text="PIX com QR Code ou cartão dentro do fluxo do app." />
+          <FlowRow number="1" title="Pagamento" text="Finalize por PIX; cartão será ligado no próximo bloco." />
+          <FlowRow number="2" title="Triagem rápida" text="Até 4 perguntas depois da confirmação do pagamento." />
           <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem, com envio de fotos e arquivos." last />
         </View>
 
-        <PrimaryButton label="Continuar para triagem" loading={triagemLoading} onPress={iniciarTriagem} />
+        <PrimaryButton label="Continuar para pagamento" loading={false} onPress={irParaPagamento} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -917,7 +939,9 @@ const styles = StyleSheet.create({
   flowTitle: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
   flowText: { color: '#8a97a6', fontSize: 12, lineHeight: 17, marginTop: 3 },
 
-  triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -7, marginBottom: 12 },
+  paidBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginTop: -8, marginBottom: 12 },
+  paidBadgeText: { color: '#78f25f', fontSize: 9.5, fontWeight: '900', letterSpacing: .7 },
+  triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   triageProgressText: { color: '#78f25f', fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
   triageChat: { flex: 1, marginTop: 2 },
   triageChatContent: { paddingBottom: 18, gap: 11 },
