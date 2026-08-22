@@ -2,15 +2,17 @@
   "expo": {
     "name": "ConsultaJá24h",
     "slug": "consultaja24h",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.consultaja24h.app"
+      "bundleIdentifier": "com.consultaja24h.app",
+      "buildNumber": "1"
     },
     "android": {
-      "package": "com.consultaja24h.app"
+      "package": "com.consultaja24h.app",
+      "versionCode": 1
     },
     "plugins": ["expo-secure-store"]
   }
