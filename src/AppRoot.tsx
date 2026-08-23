@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -20,6 +20,9 @@ export default function AppRoot() {
   const [atendimento, setAtendimento] = useState<AtendimentoEmAndamento | null>(null);
   const [modoAtendimento, setModoAtendimento] = useState(false);
   const [mostrarInicio, setMostrarInicio] = useState(false);
+  const atendimentoIdRef = useRef<number | null>(null);
+  const etapaRef = useRef<AtendimentoEmAndamento['etapa'] | null>(null);
+  const chatFechadoManualRef = useRef(false);
 
   useEffect(() => {
     let ativo = true;
@@ -31,7 +34,31 @@ export default function AppRoot() {
       try {
         const data = await carregarAtendimentoEmAndamento();
         if (!ativo) return;
-        setAtendimento(data.atendimento || null);
+        const atual = data.atendimento || null;
+
+        if (!atual) {
+          atendimentoIdRef.current = null;
+          etapaRef.current = null;
+          chatFechadoManualRef.current = false;
+          setAtendimento(null);
+          return;
+        }
+
+        const atendimentoMudou = atendimentoIdRef.current !== atual.id;
+        const entrouNoChat = etapaRef.current !== 'chat' && atual.etapa === 'chat';
+
+        if (atendimentoMudou) {
+          atendimentoIdRef.current = atual.id;
+          chatFechadoManualRef.current = false;
+        }
+
+        etapaRef.current = atual.etapa;
+        setAtendimento(atual);
+
+        if (atual.etapa === 'chat' && (atendimentoMudou || entrouNoChat) && !chatFechadoManualRef.current) {
+          setMostrarInicio(false);
+          setModoAtendimento(true);
+        }
       } catch {
         // Sem sessão, sessão expirada ou sem atendimento: o fluxo normal cuida disso.
       } finally {
@@ -41,7 +68,7 @@ export default function AppRoot() {
     }
 
     recuperar();
-    const timer = setInterval(recuperar, 4000);
+    const timer = setInterval(recuperar, 3000);
     return () => {
       ativo = false;
       clearInterval(timer);
@@ -61,12 +88,16 @@ export default function AppRoot() {
       <AtendimentoAtual
         atendimentoInicial={atendimento}
         onVoltar={() => {
+          if (atendimento.etapa === 'chat') chatFechadoManualRef.current = true;
           setModoAtendimento(false);
           setMostrarInicio(true);
         }}
         onAtualizado={(atual) => {
           setAtendimento(atual);
           if (!atual) {
+            atendimentoIdRef.current = null;
+            etapaRef.current = null;
+            chatFechadoManualRef.current = false;
             setModoAtendimento(false);
             setMostrarInicio(true);
           }
@@ -86,7 +117,10 @@ export default function AppRoot() {
 
           <AtendimentoEmAndamentoCard
             atendimento={atendimento}
-            onContinuar={() => setModoAtendimento(true)}
+            onContinuar={() => {
+              chatFechadoManualRef.current = false;
+              setModoAtendimento(true);
+            }}
           />
 
           <Pressable onPress={() => setMostrarInicio(true)} style={styles.secondaryButton}>
@@ -102,7 +136,10 @@ export default function AppRoot() {
       <LegacyApp />
       {atendimento ? (
         <Pressable
-          onPress={() => setModoAtendimento(true)}
+          onPress={() => {
+            chatFechadoManualRef.current = false;
+            setModoAtendimento(true);
+          }}
           style={styles.resumeButton}
           accessibilityRole="button"
           accessibilityLabel="Voltar ao atendimento em andamento"
