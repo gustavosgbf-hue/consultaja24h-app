@@ -23,22 +23,28 @@ export default function AppRoot() {
 
   useEffect(() => {
     let ativo = true;
+    let checando = false;
 
     async function recuperar() {
+      if (!ativo || checando) return;
+      checando = true;
       try {
         const data = await carregarAtendimentoEmAndamento();
         if (!ativo) return;
-        if (data.atendimento) setAtendimento(data.atendimento);
+        setAtendimento(data.atendimento || null);
       } catch {
         // Sem sessão, sessão expirada ou sem atendimento: o fluxo normal cuida disso.
       } finally {
+        checando = false;
         if (ativo) setChecking(false);
       }
     }
 
     recuperar();
+    const timer = setInterval(recuperar, 4000);
     return () => {
       ativo = false;
+      clearInterval(timer);
     };
   }, []);
 
@@ -54,10 +60,16 @@ export default function AppRoot() {
     return (
       <AtendimentoAtual
         atendimentoInicial={atendimento}
-        onVoltar={() => setModoAtendimento(false)}
+        onVoltar={() => {
+          setModoAtendimento(false);
+          setMostrarInicio(true);
+        }}
         onAtualizado={(atual) => {
           setAtendimento(atual);
-          if (!atual) setModoAtendimento(false);
+          if (!atual) {
+            setModoAtendimento(false);
+            setMostrarInicio(true);
+          }
         }}
       />
     );
@@ -85,10 +97,34 @@ export default function AppRoot() {
     );
   }
 
-  return <LegacyApp />;
+  return (
+    <View style={styles.appWrap}>
+      <LegacyApp />
+      {atendimento ? (
+        <Pressable
+          onPress={() => setModoAtendimento(true)}
+          style={styles.resumeButton}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar ao atendimento em andamento"
+        >
+          <View style={styles.resumeDot} />
+          <View style={styles.resumeTextWrap}>
+            <Text style={styles.resumeTitle}>
+              {atendimento.etapa === 'chat' ? 'Médico conectado' : 'Atendimento em andamento'}
+            </Text>
+            <Text style={styles.resumeText}>
+              {atendimento.etapa === 'chat' ? 'Toque para abrir a conversa' : 'Toque para continuar de onde parou'}
+            </Text>
+          </View>
+          <Text style={styles.resumeArrow}>›</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
+  appWrap: { flex: 1, backgroundColor: '#07100f' },
   safe: { flex: 1, backgroundColor: '#07100f' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#07100f' },
   wrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
@@ -97,4 +133,28 @@ const styles = StyleSheet.create({
   subtitle: { color: '#8a97a6', fontSize: 14, marginTop: 6 },
   secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#8fa098', fontSize: 13, fontWeight: '700' },
+  resumeButton: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+    minHeight: 64,
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10201d',
+    borderWidth: 1,
+    borderColor: '#285746',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+  },
+  resumeDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#78f25f', marginRight: 11 },
+  resumeTextWrap: { flex: 1 },
+  resumeTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  resumeText: { color: '#91a29b', fontSize: 11.5, marginTop: 3 },
+  resumeArrow: { color: '#78f25f', fontSize: 28, lineHeight: 30, marginLeft: 8 },
 });
