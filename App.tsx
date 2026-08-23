@@ -34,14 +34,17 @@ import type { Agendamento, AtendimentoHistorico, Paciente } from './src/types';
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
 const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
 
+const PERGUNTA_DOCUMENTO = 'Você precisa de atestado, receita, declaração ou outro documento nesta consulta?';
+
 const SYSTEM_TRIAGE = `Você é o assistente de triagem do ConsultaJá24h para uma consulta médica por chat.
 O paciente já informou a queixa inicial. NÃO peça nome, telefone ou CPF.
-Conduza uma anamnese breve, em português brasileiro, com UMA pergunta por vez e NO MÁXIMO 4 perguntas adicionais.
-Priorize apenas o que muda a segurança e a condução: tempo de evolução, intensidade, febre, sintomas associados, sinais de alarme, alergias, doenças crônicas, medicamentos em uso e possibilidade de gestação quando pertinente.
+Conduza uma anamnese breve, em português brasileiro, com UMA pergunta por vez.
+Faça NO MÁXIMO 3 perguntas clínicas adicionais, priorizando somente o que muda a segurança e a condução: tempo de evolução, intensidade, febre, sintomas associados, sinais de alarme, alergias, doenças crônicas, medicamentos em uso e possibilidade de gestação quando pertinente.
+Depois das perguntas clínicas e ANTES de concluir, pergunte obrigatoriamente, em uma pergunta separada, se o paciente precisa de atestado, receita, declaração ou outro documento nesta consulta.
 Não faça diagnóstico, não prescreva, não prometa atestado e não substitua o médico.
 Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda finalize o resumo para o médico.
-Quando já houver informação suficiente ou após a quarta resposta do paciente, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
-Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta adicional.`;
+Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
+Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
 type Tela = 'home' | 'perfil' | 'nova-consulta';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
@@ -82,6 +85,23 @@ function resumirTexto(texto?: string | null, limite = 120) {
   return limpo.length > limite ? `${limpo.slice(0, limite).trim()}…` : limpo;
 }
 
+function formatarStatus(status?: string | null) {
+  const valor = String(status || '').trim().toLowerCase();
+  if (!valor) return 'Finalizado';
+  const mapa: Record<string, string> = {
+    pagamento_pendente: 'Pagamento pendente',
+    aguardando_pagamento: 'Pagamento pendente',
+    pago: 'Pagamento confirmado',
+    triagem: 'Triagem',
+    aguardando: 'Aguardando médico',
+    fila: 'Aguardando médico',
+    assumido: 'Em atendimento',
+    encerrado: 'Finalizado',
+    finalizado: 'Finalizado',
+  };
+  return mapa[valor] || valor.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
 function mascararEmail(email?: string | null) {
   const valor = String(email || '').trim();
   const [local, dominio] = valor.split('@');
@@ -100,6 +120,14 @@ function mascararTelefone(tel?: string | null) {
   if (n.length < 10) return tel || 'Não informado';
   const f = formatarTelefone(n);
   return f.replace(/\d(?=\d{4})/g, '•');
+}
+
+function jaPerguntouSobreDocumento(history: TriageMessage[]) {
+  return history.some(
+    (mensagem) =>
+      mensagem.role === 'assistant' &&
+      /(atestado|receita|declara[cç][aã]o|documento)/i.test(mensagem.content),
+  );
 }
 
 async function abrirLink(url: string) {
@@ -423,7 +451,7 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
             <View style={styles.lastCard}>
               <View style={styles.lastTop}>
                 <View style={styles.datePill}><Text style={styles.datePillText}>{formatarData(ultimo.criado_em)}</Text></View>
-                <Text style={styles.statusText}>{ultimo.status || 'finalizado'}</Text>
+                <Text style={styles.statusText}>{formatarStatus(ultimo.status)}</Text>
               </View>
               <Text style={styles.lastDoctor}>{ultimo.medico_nome || 'Consulta médica'}</Text>
               <Text style={styles.lastSummary}>{resumirTexto(ultimo.triagem)}</Text>
@@ -439,7 +467,7 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
             <View key={String(item.id)} style={styles.historyCard}>
               <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>
                 <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>
-                <Text style={styles.historyMeta}>{formatarData(ultimo.criado_em)} · {item.tipo || 'chat'}</Text>
+                <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>
                 <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>
               </View></View>
             </View>
@@ -573,7 +601,8 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   async function concluirTriagem(resumo: string, history: TriageMessage[], atendimentoId: number) {
     setTriagemResumo(resumo || queixa.trim());
     setPerguntaAtual('');
-    setTriageMessages([...history, { role: 'assistant', content: `TRIAGEM_CONCLUIDA: ${resumo}` }]);
+    // O prefixo TRIAGEM_CONCLUIDA é protocolo interno e nunca deve aparecer para o paciente.
+    setTriageMessages(history);
     setTriagemLoading(true);
     try {
       await atualizarAtendimento(atendimentoId, {
@@ -598,6 +627,19 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     if (!limpo) throw new Error('A triagem não retornou uma resposta.');
     if (limpo.startsWith('TRIAGEM_CONCLUIDA:')) {
       if (!atendimentoId) throw new Error('Atendimento pago não encontrado.');
+
+      // Fallback determinístico: mesmo que o modelo tente concluir cedo,
+      // a pergunta de solicitação documental é obrigatória antes da fila.
+      if (!jaPerguntouSobreDocumento(history)) {
+        const historyComPergunta: TriageMessage[] = [
+          ...history,
+          { role: 'assistant', content: PERGUNTA_DOCUMENTO },
+        ];
+        setPerguntaAtual(PERGUNTA_DOCUMENTO);
+        setTriageMessages(historyComPergunta);
+        return;
+      }
+
       const resumo = limpo.replace(/^TRIAGEM_CONCLUIDA:\s*/i, '').trim();
       await concluirTriagem(resumo || queixa.trim(), history, atendimentoId);
       return;
@@ -611,6 +653,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     if (!resposta || triagemLoading || !atendimentoPagoId) return;
     const history: TriageMessage[] = [...triageMessages, { role: 'user', content: resposta }];
     setRespostaTriagem('');
+    setPerguntaAtual('');
     setTriageMessages(history);
     setTriagemLoading(true);
     try {
@@ -674,14 +717,23 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
                   <View key={`${index}-${msg.content.slice(0, 8)}`} style={styles.userBubble}><Text style={styles.userBubbleText}>{msg.content}</Text></View>
                 )
               ))}
-              {triagemLoading && !perguntaAtual ? <View style={styles.aiBubble}><ActivityIndicator color="#16c783" /></View> : null}
+              {triagemLoading && !perguntaAtual ? (
+                <View style={styles.aiBubble}>
+                  <Text style={styles.aiBubbleLabel}>TRIAGEM</Text>
+                  <View style={styles.typingRow}>
+                    <View style={styles.typingDot} />
+                    <View style={styles.typingDot} />
+                    <View style={styles.typingDot} />
+                  </View>
+                </View>
+              ) : null}
             </ScrollView>
 
             <View style={styles.triageComposer}>
               <TextInput
                 value={respostaTriagem}
                 onChangeText={setRespostaTriagem}
-                placeholder={perguntaAtual || 'Aguarde a próxima pergunta...'}
+                placeholder={triagemLoading ? 'Aguarde...' : 'Digite sua resposta...'}
                 placeholderTextColor="#66736e"
                 style={styles.triageInput}
                 multiline
@@ -692,7 +744,6 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
                 {triagemLoading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.sendButtonText}>↑</Text>}
               </Pressable>
             </View>
-            {perguntaAtual ? <Text style={styles.currentQuestion}>{perguntaAtual}</Text> : null}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -706,13 +757,13 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
           <PageHeader title="Atendimento" onVoltar={onVoltar} />
           <View style={styles.queueHero}>
             <View style={styles.queueCheck}><Text style={styles.queueCheckText}>✓</Text></View>
-            <Text style={styles.queueTitle}>Tudo pronto</Text>
-            <Text style={styles.queueText}>Pagamento confirmado e triagem concluída. Seu atendimento já pode seguir para a fila médica.</Text>
+            <Text style={styles.queueTitle}>Triagem concluída</Text>
+            <Text style={styles.queueText}>Pronto. Suas informações já foram enviadas para o médico. Agora é só aguardar por aqui.</Text>
           </View>
           <View style={styles.queueCard}>
-            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.queueKicker}>ATENDIMENTO #{atendimentoPagoId || ''}</Text></View>
-            <Text style={styles.queueCardTitle}>Aguardando médico</Text>
-            <Text style={styles.queueCardText}>Este é o mesmo ID usado no painel profissional. Você não precisa gerar outro pagamento nem repetir a triagem.</Text>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.queueKicker}>ATENDIMENTO EM ANDAMENTO</Text></View>
+            <Text style={styles.queueCardTitle}>Aguardando um médico</Text>
+            <Text style={styles.queueCardText}>Quando um médico assumir, a conversa será aberta automaticamente no app. Você também pode voltar ao início e continuar depois sem perder o atendimento.</Text>
           </View>
           <PrimaryButton label="Voltar ao início" loading={false} onPress={onVoltar} />
         </ScrollView>
@@ -763,9 +814,9 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
         <View style={styles.flowPreview}>
           <Text style={styles.flowPreviewTitle}>Como vai funcionar</Text>
-          <FlowRow number="1" title="Pagamento" text="Finalize por PIX; cartão será ligado no próximo bloco." />
-          <FlowRow number="2" title="Triagem rápida" text="Até 4 perguntas depois da confirmação do pagamento." />
-          <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem, com envio de fotos e arquivos." last />
+          <FlowRow number="1" title="Pagamento" text="Finalize por PIX ou cartão." />
+          <FlowRow number="2" title="Triagem rápida" text="Perguntas objetivas depois da confirmação do pagamento." />
+          <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem pelo próprio app." last />
         </View>
 
         <PrimaryButton label="Continuar para pagamento" loading={false} onPress={irParaPagamento} />
@@ -866,7 +917,7 @@ const styles = StyleSheet.create({
   lastTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   datePill: { backgroundColor: '#e5f7eb', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   datePillText: { color: '#18724f', fontSize: 11, fontWeight: '800' },
-  statusText: { color: '#75827e', fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  statusText: { color: '#75827e', fontSize: 11, fontWeight: '700' },
   lastDoctor: { color: '#14201d', fontSize: 17, fontWeight: '800', marginTop: 14 },
   lastSummary: { color: '#596763', lineHeight: 20, marginTop: 6 },
   historyCard: { marginBottom: 9 },
@@ -958,7 +1009,8 @@ const styles = StyleSheet.create({
   sendButton: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
   sendButtonDisabled: { opacity: .35 },
   sendButtonText: { color: '#07100f', fontSize: 24, fontWeight: '900', marginTop: -2 },
-  currentQuestion: { color: '#84908c', fontSize: 11.5, lineHeight: 16, marginTop: 7, paddingHorizontal: 3 },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 20, paddingHorizontal: 2 },
+  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783', opacity: .65 },
 
   queueHero: { alignItems: 'center', paddingVertical: 22, paddingHorizontal: 8 },
   queueCheck: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', alignItems: 'center', justifyContent: 'center' },
