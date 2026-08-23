@@ -134,7 +134,8 @@ export async function verificarOtpPaciente(challengeId: string, codigo: string) 
 }
 
 export async function conversarTriagem(system: string, messages: TriageMessage[]) {
-  return postJson<{ text: string }>('/api/triage', { system, messages });
+  const systemComDocumentos = `${system}\n\nREGRA OBRIGATÓRIA ADICIONAL: antes de concluir a triagem, faça uma pergunta específica sobre a solicitação do paciente: \"Além do atendimento, você precisa de atestado, receita, declaração ou outro documento?\". Essa pergunta deve ocorrer dentro do limite total de perguntas. Não conclua com TRIAGEM_CONCLUIDA antes de obter essa resposta. Inclua a resposta em Solicitação/observações no resumo final.`;
+  return postJson<{ text: string }>('/api/triage', { system: systemComDocumentos, messages });
 }
 
 async function authenticatedFetch<T>(path: string): Promise<T> {
