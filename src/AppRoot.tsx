@@ -75,6 +75,8 @@ export default function AppRoot() {
     };
   }, []);
 
+  const betaEmTriagem = atendimento?.etapa === 'triagem' && atendimento.pagamento_metodo === 'beta_test';
+
   if (checking) {
     return (
       <SafeAreaView style={styles.centered}>
@@ -83,7 +85,7 @@ export default function AppRoot() {
     );
   }
 
-  if (modoAtendimento && atendimento) {
+  if (modoAtendimento && atendimento && !betaEmTriagem) {
     return (
       <AtendimentoAtual
         atendimentoInicial={atendimento}
@@ -106,7 +108,7 @@ export default function AppRoot() {
     );
   }
 
-  if (atendimento && !mostrarInicio) {
+  if (atendimento && !mostrarInicio && !betaEmTriagem) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
@@ -134,7 +136,7 @@ export default function AppRoot() {
   return (
     <View style={styles.appWrap}>
       <LegacyApp />
-      {atendimento ? (
+      {atendimento && !betaEmTriagem ? (
         <Pressable
           onPress={() => {
             chatFechadoManualRef.current = false;
