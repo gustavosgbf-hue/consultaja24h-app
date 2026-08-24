@@ -22,9 +22,10 @@ type Props = {
   atendimentoId: number;
   medicoNome?: string | null;
   onVoltar: () => void;
+  somenteLeitura?: boolean;
 };
 
-export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Props) {
+export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, somenteLeitura = false }: Props) {
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,12 +52,12 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
     }
 
     carregar();
-    timer = setInterval(() => carregar(true), 3000);
+    if (!somenteLeitura) timer = setInterval(() => carregar(true), 3000);
     return () => {
       ativo = false;
       if (timer) clearInterval(timer);
     };
-  }, [atendimentoId]);
+  }, [atendimentoId, somenteLeitura]);
 
   useEffect(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -101,7 +102,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
         <View style={styles.header}>
           <Pressable onPress={onVoltar} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerCenter}>
-            <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.status}>ATENDIMENTO EM ANDAMENTO</Text></View>
+            <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.status}>{somenteLeitura ? 'HISTÓRICO DA CONSULTA' : 'ATENDIMENTO EM ANDAMENTO'}</Text></View>
             <Text style={styles.doctor} numberOfLines={1} ellipsizeMode="tail">{medicoNome || 'Médico da ConsultaJá24h'}</Text>
             <Text style={styles.id}>Atendimento #{atendimentoId}</Text>
           </View>
@@ -118,7 +119,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.notice}>
-              <Text style={styles.noticeText}>Você está falando diretamente com o profissional responsável pelo seu atendimento.</Text>
+              <Text style={styles.noticeText}>{somenteLeitura ? 'Esta conversa foi encerrada e permanece disponível para consulta e acesso aos documentos.' : 'Você está falando diretamente com o profissional responsável pelo seu atendimento.'}</Text>
             </View>
             {mensagens.length === 0 ? (
               <View style={styles.empty}><Text style={styles.emptyTitle}>Conversa iniciada</Text><Text style={styles.emptyText}>Envie uma mensagem quando quiser complementar alguma informação.</Text></View>
@@ -146,24 +147,26 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
           </ScrollView>
         )}
 
-        <View style={styles.composer}>
-          <TextInput
-            value={texto}
-            onChangeText={setTexto}
-            placeholder="Escreva uma mensagem..."
-            placeholderTextColor="#6f7d78"
-            style={styles.input}
-            multiline
-            maxLength={3000}
-            editable={!enviando}
-            returnKeyType="send"
-            submitBehavior="submit"
-            onSubmitEditing={enviar}
-          />
-          <Pressable onPress={enviar} disabled={!texto.trim() || enviando} style={[styles.send, (!texto.trim() || enviando) && styles.sendDisabled]}>
-            {enviando ? <ActivityIndicator color="#07100f" size="small" /> : <Text style={styles.sendText}>↑</Text>}
-          </Pressable>
-        </View>
+        {!somenteLeitura ? (
+          <View style={styles.composer}>
+            <TextInput
+              value={texto}
+              onChangeText={setTexto}
+              placeholder="Escreva uma mensagem..."
+              placeholderTextColor="#6f7d78"
+              style={styles.input}
+              multiline
+              maxLength={3000}
+              editable={!enviando}
+              returnKeyType="send"
+              submitBehavior="submit"
+              onSubmitEditing={enviar}
+            />
+            <Pressable onPress={enviar} disabled={!texto.trim() || enviando} style={[styles.send, (!texto.trim() || enviando) && styles.sendDisabled]}>
+              {enviando ? <ActivityIndicator color="#07100f" size="small" /> : <Text style={styles.sendText}>↑</Text>}
+            </Pressable>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

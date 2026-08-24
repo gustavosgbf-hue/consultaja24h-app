@@ -1,5 +1,5 @@
 import { getSessionToken } from '../auth/session';
-import type { Agendamento, AtendimentoHistorico, Paciente } from '../types';
+import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from '../types';
 
 const API_BASE_URL = 'https://triagem-api.onrender.com';
 
@@ -176,6 +176,10 @@ export async function carregarAgendamentos() {
 
 export async function carregarHistoricoPaciente() {
   return authenticatedFetch<{ ok: boolean; atendimentos: AtendimentoHistorico[] }>('/api/paciente/historico');
+}
+
+export async function carregarDocumentosPaciente() {
+  return authenticatedFetch<{ ok: boolean; documentos: DocumentoPaciente[] }>('/api/paciente/documentos');
 }
 
 export async function carregarAtendimentoEmAndamento() {

@@ -17,6 +17,7 @@ import {
   atualizarAtendimento,
   carregarAgendamentos,
   carregarHistoricoPaciente,
+  carregarDocumentosPaciente,
   carregarPaciente,
   conversarTriagem,
   iniciarAtendimentoBeta,
@@ -30,7 +31,8 @@ import {
   saveSessionToken,
 } from './src/auth/session';
 import PagamentoConsulta from './src/components/PagamentoConsulta';
-import type { Agendamento, AtendimentoHistorico, Paciente } from './src/types';
+import ChatPaciente from './src/components/ChatPaciente';
+import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
 const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
@@ -48,7 +50,7 @@ Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda 
 Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
 Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
-type Tela = 'home' | 'perfil' | 'nova-consulta';
+type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
 type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
 
@@ -155,6 +157,8 @@ export default function App() {
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [historico, setHistorico] = useState<AtendimentoHistorico[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoPaciente[]>([]);
+  const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
 
   useEffect(() => {
@@ -176,14 +180,16 @@ export default function App() {
   async function carregarHome() {
     setHomeLoading(true);
     try {
-      const [me, agenda, history] = await Promise.all([
+      const [me, agenda, history, docs] = await Promise.all([
         carregarPaciente(),
         carregarAgendamentos(),
         carregarHistoricoPaciente().catch(() => ({ ok: true, atendimentos: [] })),
+        carregarDocumentosPaciente().catch(() => ({ ok: true, documentos: [] })),
       ]);
       setPaciente(me.paciente);
       setAgendamentos(agenda.agendamentos || []);
       setHistorico(history.atendimentos || []);
+      setDocumentos(docs.documentos || []);
     } finally {
       setHomeLoading(false);
     }
@@ -301,6 +307,8 @@ export default function App() {
     setPaciente(null);
     setAgendamentos([]);
     setHistorico([]);
+    setDocumentos([]);
+    setHistoricoSelecionado(null);
     setTela('home');
     setTelefone('');
     setEmail('');
@@ -387,31 +395,55 @@ export default function App() {
     return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} />;
   }
 
+  if (tela === 'documentos') {
+    return <DocumentosPaciente documentos={documentos} onVoltar={() => setTela('home')} onAbrirConsulta={(id) => {
+      const item = historico.find((h) => h.id === id) || null;
+      if (item) { setHistoricoSelecionado(item); setTela('historico-chat'); }
+    }} />;
+  }
+
+  if (tela === 'historico-chat' && historicoSelecionado) {
+    return (
+      <ChatPaciente
+        atendimentoId={historicoSelecionado.id}
+        medicoNome={historicoSelecionado.medico_nome || historicoSelecionado.profissional_nome}
+        somenteLeitura
+        onVoltar={() => { setTela('home'); setHistoricoSelecionado(null); }}
+      />
+    );
+  }
+
   return (
     <PacienteHome
       paciente={paciente}
       agendamentos={agendamentos}
       historico={historico}
+      documentos={documentos}
       loading={homeLoading}
       mostrarTudo={mostrarHistoricoCompleto}
       onMostrarTudo={() => setMostrarHistoricoCompleto((valor) => !valor)}
       onAtualizar={carregarHome}
       onPerfil={() => setTela('perfil')}
       onNovaConsulta={() => setTela('nova-consulta')}
+      onDocumentos={() => setTela('documentos')}
+      onAbrirAtendimento={(item) => { setHistoricoSelecionado(item); setTela('historico-chat'); }}
     />
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta }: {
+function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
+  documentos: DocumentoPaciente[];
   loading: boolean;
   mostrarTudo: boolean;
   onMostrarTudo: () => void;
   onAtualizar: () => void;
   onPerfil: () => void;
   onNovaConsulta: () => void;
+  onDocumentos: () => void;
+  onAbrirAtendimento: (item: AtendimentoHistorico) => void;
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
   const ultimo = historico[0];
@@ -450,14 +482,15 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
         {ultimo && (
           <>
             <SectionHeader title="Último atendimento" />
-            <View style={styles.lastCard}>
+            <Pressable onPress={() => onAbrirAtendimento(ultimo)} style={styles.lastCard}>
               <View style={styles.lastTop}>
                 <View style={styles.datePill}><Text style={styles.datePillText}>{formatarData(ultimo.criado_em)}</Text></View>
                 <Text style={styles.statusText}>{formatarStatus(ultimo.status)}</Text>
               </View>
               <Text style={styles.lastDoctor}>{ultimo.medico_nome || 'Consulta médica'}</Text>
               <Text style={styles.lastSummary}>{resumirTexto(ultimo.triagem)}</Text>
-            </View>
+              <Text style={styles.openHistoryHint}>Ver conversa e documentos ›</Text>
+            </Pressable>
           </>
         )}
 
@@ -466,13 +499,14 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
           <ActivityIndicator color="#16c783" style={{ marginVertical: 24 }} />
         ) : itensHistorico.length ? (
           itensHistorico.map((item) => (
-            <View key={String(item.id)} style={styles.historyCard}>
+            <Pressable key={String(item.id)} onPress={() => onAbrirAtendimento(item)} style={styles.historyCard}>
               <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>
                 <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>
                 <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>
                 <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>
+                <Text style={styles.historyOpen}>Abrir conversa ›</Text>
               </View></View>
-            </View>
+            </Pressable>
           ))
         ) : (
           <EmptyCard title="Seu histórico aparecerá aqui" text="Os atendimentos vinculados ao seu cadastro ficam organizados no app." />
@@ -490,13 +524,45 @@ function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo,
           </>
         )}
 
-        <View style={styles.docsCard}>
-          <View style={styles.docsIcon}><Text style={styles.docsIconText}>+</Text></View>
-          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>Receitas, atestados e pedidos ficarão reunidos aqui.</Text></View>
+        <Pressable onPress={onDocumentos} style={styles.docsCard}>
+          <View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>{documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} disponível${documentos.length === 1 ? '' : 'is'}` : 'Receitas, atestados e pedidos ficarão reunidos aqui.'}</Text></View>
           <Text style={styles.chevron}>›</Text>
-        </View>
+        </Pressable>
 
         <Pressable onPress={onAtualizar} style={styles.refreshButton}><Text style={styles.refreshText}>Atualizar dados</Text></Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
+  documentos: DocumentoPaciente[];
+  onVoltar: () => void;
+  onAbrirConsulta: (atendimentoId: number) => void;
+}) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.pageWrap}>
+        <PageHeader title="Meus documentos" onVoltar={onVoltar} />
+        <Text style={styles.pageLead}>Documentos recebidos nas suas consultas ficam disponíveis aqui e também dentro da conversa original.</Text>
+        {documentos.length ? documentos.map((doc) => (
+          <View key={String(doc.id)} style={styles.documentItem}>
+            <Pressable onPress={() => abrirLink(doc.arquivo_url)} style={styles.documentMain}>
+              <View style={styles.documentPdf}><Text style={styles.documentPdfText}>PDF</Text></View>
+              <View style={styles.documentInfo}>
+                <Text style={styles.documentName} numberOfLines={2}>{doc.arquivo_nome || 'Documento médico.pdf'}</Text>
+                <Text style={styles.documentMeta}>{doc.profissional_nome || 'Profissional da ConsultaJá24h'} · {formatarData(doc.criado_em)}</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+            <Pressable onPress={() => onAbrirConsulta(doc.atendimento_id)} style={styles.documentConsultButton}>
+              <Text style={styles.documentConsultText}>Ver consulta original</Text>
+            </Pressable>
+          </View>
+        )) : (
+          <EmptyCard title="Nenhum documento ainda" text="Quando um profissional enviar um PDF pelo atendimento, ele aparecerá automaticamente aqui." />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -967,6 +1033,17 @@ const styles = StyleSheet.create({
   docsIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#123027', alignItems: 'center', justifyContent: 'center' },
   docsIconText: { color: '#78f25f', fontSize: 25, fontWeight: '400', marginTop: -2 },
   docsTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  openHistoryHint: { marginTop: 12, color: '#68c99a', fontSize: 12, fontWeight: '700' },
+  historyOpen: { marginTop: 7, color: '#67bd94', fontSize: 11, fontWeight: '700' },
+  documentItem: { backgroundColor: '#0d1916', borderWidth: 1, borderColor: '#1b2b26', borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
+  documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15 },
+  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#14231f', borderWidth: 1, borderColor: '#28463b' },
+  documentPdfText: { color: '#91b4a6', fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
+  documentInfo: { flex: 1, minWidth: 0 },
+  documentName: { color: '#eef5f1', fontSize: 14, lineHeight: 19, fontWeight: '800' },
+  documentMeta: { color: '#76867f', fontSize: 11, marginTop: 4 },
+  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#192823' },
+  documentConsultText: { color: '#69c99a', fontSize: 12, fontWeight: '800' },
   docsText: { color: '#84908c', fontSize: 12, lineHeight: 17, marginTop: 3 },
   chevron: { color: '#66736e', fontSize: 27 },
   refreshButton: { alignItems: 'center', marginTop: 22, paddingVertical: 12 },

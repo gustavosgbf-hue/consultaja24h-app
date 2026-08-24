@@ -31,6 +31,18 @@ export type AtendimentoHistorico = {
   criado_em?: string | null;
 };
 
+export type DocumentoPaciente = {
+  id: number;
+  atendimento_id: number;
+  arquivo_url: string;
+  arquivo_tipo?: string | null;
+  arquivo_nome?: string | null;
+  profissional_nome: string;
+  medico_nome?: string | null;
+  criado_em: string;
+  data_atendimento?: string | null;
+};
+
 export type LoginResponse = {
   ok: boolean;
   token?: string;
