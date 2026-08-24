@@ -1,0 +1,38 @@
+name: Guarded OTA publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ota-once.yml'
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Verify Expo authentication
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is not configured in this repository."
+            exit 78
+          fi
+
+      - name: Publish OTA to production
+        run: npx eas-cli@latest update --channel production --message "Patient history, documents, replies and read receipts" --non-interactive
