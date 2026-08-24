@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
@@ -10,7 +10,6 @@ import {
   iniciarAtendimento,
   vincularPixAoAtendimento,
 } from '../api/client';
-import { getSessionToken } from '../auth/session';
 import type { Paciente } from '../types';
 import EfiCardForm from './EfiCardForm';
 
@@ -25,9 +24,6 @@ type Props = {
 };
 
 type Metodo = 'pix' | 'cartao';
-type BetaState = 'checking' | 'active' | 'normal' | 'error';
-
-const API_BASE_URL = 'https://triagem-api.onrender.com';
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -58,60 +54,9 @@ export default function PagamentoConsulta({
   const [cartaoPendente, setCartaoPendente] = useState(false);
   const [cartaoMask, setCartaoMask] = useState('');
   const [cartaoFormKey, setCartaoFormKey] = useState(0);
-  const [betaState, setBetaState] = useState<BetaState>('checking');
-  const [betaError, setBetaError] = useState('');
-  const betaStartedRef = useRef(false);
 
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
-
-  async function verificarBeta() {
-    if (betaStartedRef.current) return;
-    betaStartedRef.current = true;
-    setBetaState('checking');
-    setBetaError('');
-    try {
-      const token = await getSessionToken();
-      if (!token) throw new Error('Sessão não encontrada.');
-      const response = await fetch(`${API_BASE_URL}/api/paciente/beta/iniciar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          nome: pacienteNome,
-          cpf: digits(pacienteCpf),
-          email: pacienteLogado.email || '',
-          dataNascimento: pacienteNascimento || '',
-          atendimentoParaTerceiro,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (response.status === 403) {
-        setBetaState('normal');
-        return;
-      }
-      if (!response.ok || !data?.ok || !data?.atendimentoId) {
-        throw new Error(typeof data?.error === 'string' ? data.error : 'Não foi possível verificar o modo de teste.');
-      }
-
-      const id = Number(data.atendimentoId);
-      setAtendimentoId(id);
-      setBetaState('active');
-      onPagamentoConfirmado(id);
-    } catch (error) {
-      betaStartedRef.current = false;
-      const message = error instanceof Error ? error.message : 'Não foi possível verificar o modo de teste.';
-      setBetaError(message);
-      setBetaState('error');
-    }
-  }
-
-  useEffect(() => {
-    verificarBeta();
-  }, []);
 
   async function garantirAtendimento() {
     if (atendimentoId) return atendimentoId;
@@ -129,7 +74,9 @@ export default function PagamentoConsulta({
     });
     if (!criado.atendimentoId) throw new Error('Não foi possível criar o atendimento.');
     setAtendimentoId(criado.atendimentoId);
-    if (criado.pagamentoConfirmado) onPagamentoConfirmado(criado.atendimentoId);
+    if (criado.pagamentoConfirmado) {
+      onPagamentoConfirmado(criado.atendimentoId);
+    }
     return criado.atendimentoId;
   }
 
@@ -137,6 +84,7 @@ export default function PagamentoConsulta({
     if (!orderId || !atendimentoId) return;
     let ativo = true;
     let checando = false;
+
     async function verificar() {
       if (!ativo || checando) return;
       checando = true;
@@ -164,15 +112,20 @@ export default function PagamentoConsulta({
         checando = false;
       }
     }
+
     verificar();
     const timer = setInterval(verificar, 3000);
-    return () => { ativo = false; clearInterval(timer); };
+    return () => {
+      ativo = false;
+      clearInterval(timer);
+    };
   }, [orderId, atendimentoId, onPagamentoConfirmado]);
 
   useEffect(() => {
     if (!cartaoPendente || !atendimentoId) return;
     let ativo = true;
     let checando = false;
+
     async function verificarCartao() {
       if (!ativo || checando) return;
       checando = true;
@@ -193,9 +146,13 @@ export default function PagamentoConsulta({
         checando = false;
       }
     }
+
     verificarCartao();
     const timer = setInterval(verificarCartao, 3000);
-    return () => { ativo = false; clearInterval(timer); };
+    return () => {
+      ativo = false;
+      clearInterval(timer);
+    };
   }, [cartaoPendente, atendimentoId, onPagamentoConfirmado]);
 
   async function gerarPix() {
@@ -232,7 +189,12 @@ export default function PagamentoConsulta({
     }
   }
 
-  async function processarTokenCartao(payload: { paymentToken: string; cardMask?: string; holderName: string; holderDocument: string; }) {
+  async function processarTokenCartao(payload: {
+    paymentToken: string;
+    cardMask?: string;
+    holderName: string;
+    holderDocument: string;
+  }) {
     if (loading || cartaoPendente) return;
     if (!pacienteLogado.email || !/^\S+@\S+\.\S+$/.test(pacienteLogado.email)) {
       Alert.alert('E-mail necessário', 'Seu cadastro precisa ter um e-mail válido para pagamento no cartão.');
@@ -244,6 +206,7 @@ export default function PagamentoConsulta({
       setCartaoFormKey((v) => v + 1);
       return;
     }
+
     setLoading(true);
     setStatus('Processando cartão com a Efí…');
     try {
@@ -316,60 +279,73 @@ export default function PagamentoConsulta({
 
   const bloqueado = loading || cartaoPendente || !!pixCode;
 
-  if (betaState === 'checking' || betaState === 'active' || betaState === 'error') {
-    return (
-      <View style={styles.betaCard}>
-        {betaState !== 'error' ? <ActivityIndicator size="large" color="#16c783" /> : null}
-        <Text style={styles.betaTitle}>{betaState === 'error' ? 'Não foi possível preparar a consulta' : 'Preparando sua consulta'}</Text>
-        <Text style={styles.betaText}>{betaState === 'error' ? betaError : 'Verificando seu acesso e liberando a próxima etapa…'}</Text>
-        {betaState === 'error' ? (
-          <Pressable onPress={verificarBeta} style={styles.verifyButton}>
-            <Text style={styles.verifyText}>Tentar novamente</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    );
-  }
-
   return (
     <View>
       <View style={styles.stepBadge}><Text style={styles.stepBadgeText}>PAGAMENTO SEGURO</Text></View>
       <Text style={styles.title}>Finalize sua consulta</Text>
       <Text style={styles.lead}>Assim que o pagamento for confirmado, o app libera uma triagem rápida antes de entrar na fila médica.</Text>
+
       <View style={styles.patientCard}>
         <Text style={styles.patientLabel}>PACIENTE</Text>
         <Text style={styles.patientName}>{pacienteNome}</Text>
         {atendimentoParaTerceiro ? <Text style={styles.patientHint}>O titular do pagamento pode ser diferente do paciente.</Text> : null}
       </View>
+
       {!pixCode && !cartaoPendente ? (
         <>
           <View style={styles.tabs}>
             <Pressable onPress={() => setMetodo('pix')} style={[styles.tab, metodo === 'pix' && styles.tabActive]}>
-              <Text style={[styles.tabText, metodo === 'pix' && styles.tabTextActive]}>PIX</Text><Text style={styles.tabHint}>PagBank</Text>
+              <Text style={[styles.tabText, metodo === 'pix' && styles.tabTextActive]}>PIX</Text>
+              <Text style={styles.tabHint}>PagBank</Text>
             </Pressable>
             <Pressable onPress={() => setMetodo('cartao')} style={[styles.tab, metodo === 'cartao' && styles.tabActive]}>
-              <Text style={[styles.tabText, metodo === 'cartao' && styles.tabTextActive]}>Cartão</Text><Text style={styles.tabHint}>Efí</Text>
+              <Text style={[styles.tabText, metodo === 'cartao' && styles.tabTextActive]}>Cartão</Text>
+              <Text style={styles.tabHint}>Efí</Text>
             </Pressable>
           </View>
+
           {metodo === 'pix' ? (
             <View style={styles.methodCard}>
-              <View style={styles.methodHeader}><View><Text style={styles.methodTitle}>PIX</Text><Text style={styles.methodSubtitle}>QR Code + copia e cola</Text></View><View style={styles.recommended}><Text style={styles.recommendedText}>RECOMENDADO</Text></View></View>
+              <View style={styles.methodHeader}>
+                <View>
+                  <Text style={styles.methodTitle}>PIX</Text>
+                  <Text style={styles.methodSubtitle}>QR Code + copia e cola</Text>
+                </View>
+                <View style={styles.recommended}><Text style={styles.recommendedText}>RECOMENDADO</Text></View>
+              </View>
               <Text style={styles.methodText}>Geração pelo PagBank e confirmação automática após o pagamento.</Text>
-              <Pressable onPress={gerarPix} disabled={loading} style={[styles.primaryButton, loading && { opacity: .65 }]}>{loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>Gerar PIX</Text>}</Pressable>
+              <Pressable onPress={gerarPix} disabled={loading} style={[styles.primaryButton, loading && { opacity: .65 }]}>
+                {loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>Gerar PIX</Text>}
+              </Pressable>
             </View>
           ) : (
             <View style={styles.methodCard}>
-              <View style={styles.methodHeader}><View><Text style={styles.methodTitle}>Cartão de crédito</Text><Text style={styles.methodSubtitle}>Processamento seguro pela Efí</Text></View><View style={styles.secureBadge}><Text style={styles.secureBadgeText}>TOKENIZADO</Text></View></View>
+              <View style={styles.methodHeader}>
+                <View>
+                  <Text style={styles.methodTitle}>Cartão de crédito</Text>
+                  <Text style={styles.methodSubtitle}>Processamento seguro pela Efí</Text>
+                </View>
+                <View style={styles.secureBadge}><Text style={styles.secureBadgeText}>TOKENIZADO</Text></View>
+              </View>
               <Text style={styles.methodText}>Os dados sensíveis ficam dentro do ambiente de tokenização da Efí. O servidor recebe somente o token do cartão.</Text>
-              <EfiCardForm key={cartaoFormKey} holderName={pacienteLogado.nome} holderDocument={pagadorCpf} disabled={bloqueado} onToken={processarTokenCartao} onError={(message) => Alert.alert('Cartão', message)} />
+              <EfiCardForm
+                key={cartaoFormKey}
+                holderName={pacienteLogado.nome}
+                holderDocument={pagadorCpf}
+                disabled={bloqueado}
+                onToken={processarTokenCartao}
+                onError={(message) => Alert.alert('Cartão', message)}
+              />
               {loading ? <View style={styles.inlineStatus}><ActivityIndicator color="#16c783" /><Text style={styles.statusText}>{status || 'Processando…'}</Text></View> : null}
             </View>
           )}
+
           <Pressable onPress={onVoltar} style={styles.backLink}><Text style={styles.backLinkText}>Voltar</Text></Pressable>
         </>
       ) : pixCode ? (
         <View style={styles.pixCard}>
-          <Text style={styles.pixEyebrow}>PAGAMENTO VIA PIX</Text><Text style={styles.pixValue}>{formatarValor(valor)}</Text>
+          <Text style={styles.pixEyebrow}>PAGAMENTO VIA PIX</Text>
+          <Text style={styles.pixValue}>{formatarValor(valor)}</Text>
           <Text style={styles.pixInstruction}>Abra o app do seu banco e escaneie o QR Code ou copie o código abaixo.</Text>
           <View style={styles.qrWrap}><QRCode value={pixCode} size={205} quietZone={10} /></View>
           <Pressable onPress={copiarPix} style={styles.copyButton}><Text style={styles.copyButtonText}>{copiado ? '✓ Código copiado' : 'Copiar código PIX'}</Text></Pressable>
@@ -380,7 +356,8 @@ export default function PagamentoConsulta({
         </View>
       ) : (
         <View style={styles.cardWaiting}>
-          <View style={styles.waitingIcon}><Text style={styles.waitingIconText}>✓</Text></View><Text style={styles.waitingTitle}>Cartão enviado para análise</Text>
+          <View style={styles.waitingIcon}><Text style={styles.waitingIconText}>✓</Text></View>
+          <Text style={styles.waitingTitle}>Cartão enviado para análise</Text>
           <Text style={styles.waitingText}>{cartaoMask ? `Cartão ${cartaoMask}. ` : ''}A Efí está concluindo a confirmação. Esta tela avança automaticamente quando o pagamento for aprovado.</Text>
           <View style={styles.statusRow}><ActivityIndicator size="small" color="#16c783" /><Text style={styles.statusText}>{status || 'Aguardando confirmação da Efí…'}</Text></View>
           <Pressable onPress={verificarAgora} style={styles.verifyButton}><Text style={styles.verifyText}>Verificar agora</Text></Pressable>
@@ -391,9 +368,6 @@ export default function PagamentoConsulta({
 }
 
 const styles = StyleSheet.create({
-  betaCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#285746', borderRadius: 21, padding: 24, alignItems: 'center' },
-  betaTitle: { color: '#fff', fontSize: 19, fontWeight: '900', marginTop: 14, textAlign: 'center' },
-  betaText: { color: '#a9b5b0', fontSize: 12.5, lineHeight: 19, textAlign: 'center', marginTop: 7 },
   stepBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 14 },
   stepBadgeText: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .7 },
   title: { color: '#fff', fontSize: 27, fontWeight: '800', letterSpacing: -.5, marginBottom: 9 },
