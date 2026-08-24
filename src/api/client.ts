@@ -62,6 +62,22 @@ export type IniciarAtendimentoResponse = {
   error?: string;
 };
 
+export type IniciarAtendimentoBetaInput = {
+  nome: string;
+  cpf: string;
+  email?: string;
+  dataNascimento?: string;
+  atendimentoParaTerceiro?: boolean;
+};
+
+export type IniciarAtendimentoBetaResponse = {
+  ok: boolean;
+  beta: boolean;
+  reutilizado?: boolean;
+  atendimentoId: number;
+  pagamentoConfirmado: true;
+};
+
 export type GerarPixConsultaResponse = {
   ok: boolean;
   order_id: string;
@@ -194,6 +210,20 @@ export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
     atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
     origem: 'app_paciente',
   });
+}
+
+export async function iniciarAtendimentoBeta(input: IniciarAtendimentoBetaInput) {
+  return postJson<IniciarAtendimentoBetaResponse>(
+    '/api/paciente/beta/iniciar',
+    {
+      nome: input.nome,
+      cpf: input.cpf,
+      email: input.email || undefined,
+      dataNascimento: input.dataNascimento || undefined,
+      atendimentoParaTerceiro: !!input.atendimentoParaTerceiro,
+    },
+    true,
+  );
 }
 
 export async function concluirTriagemAtendimento(atendimentoId: number, input: IniciarAtendimentoInput) {
