@@ -1,0 +1,90 @@
+name: Polish documents navigation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/polish-documents-navigation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply documents navigation and icon polish
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('App.tsx')
+          s = p.read_text()
+
+          # Reuse react-native-svg already present in the app binary.
+          anchor = "import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';\n"
+          if "from 'react-native-svg'" not in s:
+              if anchor not in s: raise SystemExit('types import anchor not found')
+              s = s.replace(anchor, anchor + "import Svg, { Path as SvgPath } from 'react-native-svg';\n", 1)
+
+          state_anchor = "  const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);\n"
+          if "historicoOrigem" not in s:
+              if state_anchor not in s: raise SystemExit('history state anchor not found')
+              s = s.replace(state_anchor, state_anchor + "  const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');\n", 1)
+
+          old_docs_open = "      if (item) { setHistoricoSelecionado(item); setTela('historico-chat'); }\n"
+          new_docs_open = "      if (item) { setHistoricoOrigem('documentos'); setHistoricoSelecionado(item); setTela('historico-chat'); }\n"
+          if old_docs_open not in s: raise SystemExit('documents history open anchor not found')
+          s = s.replace(old_docs_open, new_docs_open, 1)
+
+          old_back = "        onVoltar={() => { setTela('home'); setHistoricoSelecionado(null); }}\n"
+          new_back = "        onVoltar={() => { setTela(historicoOrigem === 'documentos' ? 'documentos' : 'home'); setHistoricoSelecionado(null); }}\n"
+          if old_back not in s: raise SystemExit('history back anchor not found')
+          s = s.replace(old_back, new_back, 1)
+
+          old_home_open = "      onAbrirAtendimento={(item) => { setHistoricoSelecionado(item); setTela('historico-chat'); }}\n"
+          new_home_open = "      onAbrirAtendimento={(item) => { setHistoricoOrigem('home'); setHistoricoSelecionado(item); setTela('historico-chat'); }}\n"
+          if old_home_open not in s: raise SystemExit('home history open anchor not found')
+          s = s.replace(old_home_open, new_home_open, 1)
+
+          old_home_icon = '<View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>'
+          new_home_icon = '<View style={styles.docsIcon}><DocumentIcon size={21} color="#78f25f" /></View>'
+          if old_home_icon not in s: raise SystemExit('home PDF icon anchor not found')
+          s = s.replace(old_home_icon, new_home_icon, 1)
+
+          old_doc_icon = '<View style={styles.documentPdf}><Text style={styles.documentPdfText}>PDF</Text></View>'
+          new_doc_icon = '<View style={styles.documentPdf}><DocumentIcon size={24} color="#91b4a6" /></View>'
+          if old_doc_icon not in s: raise SystemExit('document PDF icon anchor not found')
+          s = s.replace(old_doc_icon, new_doc_icon, 1)
+
+          component_anchor = "function PageHeader({ title, onVoltar }: { title: string; onVoltar: () => void }) {\n"
+          if "function DocumentIcon(" not in s:
+              if component_anchor not in s: raise SystemExit('component anchor not found')
+              icon = '''function DocumentIcon({ size = 22, color = '#78f25f' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgPath d="M6.75 2.75h7.1L18.25 7v14.25H6.75V2.75Z" stroke={color} strokeWidth={1.65} strokeLinejoin="round" />
+      <SvgPath d="M13.75 2.95V7.2h4.2" stroke={color} strokeWidth={1.65} strokeLinejoin="round" />
+      <SvgPath d="M9.25 11h6.5M9.25 14.25h6.5M9.25 17.5h4.4" stroke={color} strokeWidth={1.55} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+'''
+              s = s.replace(component_anchor, icon + component_anchor, 1)
+
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Commit polish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx
+          git commit -m "Polish documents navigation and icons"
+          git push
