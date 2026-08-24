@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -80,6 +81,20 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
     }
   }
 
+  async function abrirArquivo(url?: string | null) {
+    const seguro = String(url || '').trim();
+    if (!/^https:\/\//i.test(seguro)) {
+      setErro('Este arquivo não possui um link válido.');
+      return;
+    }
+    try {
+      await Linking.openURL(seguro);
+      setErro('');
+    } catch {
+      setErro('Não foi possível abrir o arquivo.');
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -110,7 +125,16 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Pr
             ) : mensagens.map((m) => (
               <View key={String(m.id)} style={[styles.messageRow, m.autor === 'paciente' ? styles.mineRow : styles.theirRow]}>
                 <View style={[styles.bubble, m.autor === 'paciente' ? styles.mineBubble : styles.theirBubble]}>
-                  {m.arquivo_url ? <Text style={styles.fileText}>{m.arquivo_nome || 'Arquivo enviado'}</Text> : null}
+                  {m.arquivo_url ? (
+                    <Pressable onPress={() => abrirArquivo(m.arquivo_url)} style={styles.fileCard}>
+                      <View style={styles.fileIcon}><Text style={styles.fileIconText}>PDF</Text></View>
+                      <View style={styles.fileMeta}>
+                        <Text style={styles.fileName} numberOfLines={2}>{m.arquivo_nome || 'Documento.pdf'}</Text>
+                        <Text style={styles.fileType}>{m.arquivo_tipo === 'pdf' ? 'Documento PDF' : 'Arquivo'}</Text>
+                      </View>
+                      <Text style={styles.fileArrow}>›</Text>
+                    </Pressable>
+                  ) : null}
                   {m.texto ? <Text style={[styles.messageText, m.autor === 'paciente' && styles.mineText]}>{m.texto}</Text> : null}
                   <Text style={[styles.time, m.autor === 'paciente' && styles.mineTime]}>
                     {new Date(m.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -168,14 +192,20 @@ const styles = StyleSheet.create({
   messageRow: { width: '100%', marginVertical: 5 },
   mineRow: { alignItems: 'flex-end' },
   theirRow: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '82%', borderRadius: 18, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 7 },
-  mineBubble: { backgroundColor: '#16c783', borderBottomRightRadius: 6 },
+  bubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 7 },
+  mineBubble: { backgroundColor: '#123d31', borderWidth: 1, borderColor: '#1b5645', borderBottomRightRadius: 6 },
   theirBubble: { backgroundColor: '#10201c', borderWidth: 1, borderColor: '#1b302a', borderBottomLeftRadius: 6 },
   messageText: { color: '#e7efeb', fontSize: 15, lineHeight: 21 },
-  mineText: { color: '#07100f' },
-  fileText: { color: '#b7c7c0', fontSize: 12, marginBottom: 6, fontWeight: '600' },
+  mineText: { color: '#edf7f3' },
+  fileCard: { minWidth: 210, maxWidth: 285, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
+  fileIcon: { width: 38, height: 44, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#182b26', borderWidth: 1, borderColor: '#29453c' },
+  fileIconText: { color: '#94b5a8', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  fileMeta: { flex: 1, minWidth: 0 },
+  fileName: { color: '#e1ebe7', fontSize: 13, lineHeight: 17, fontWeight: '700' },
+  fileType: { marginTop: 2, color: '#71857d', fontSize: 10 },
+  fileArrow: { color: '#8ba097', fontSize: 28, lineHeight: 30, marginLeft: 2 },
   time: { alignSelf: 'flex-end', color: '#66766f', fontSize: 9, marginTop: 5 },
-  mineTime: { color: '#0d5940' },
+  mineTime: { color: '#87a99c' },
   error: { color: '#d89090', fontSize: 11, textAlign: 'center', marginTop: 12 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingHorizontal: 12, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 8 : 10, borderTopWidth: 1, borderTopColor: '#16221f', backgroundColor: '#091310' },
   input: { flex: 1, maxHeight: 120, minHeight: 48, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 18, backgroundColor: '#101d1a', color: '#f1f6f3', fontSize: 15 },
