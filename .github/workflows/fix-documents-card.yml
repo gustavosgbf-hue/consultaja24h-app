@@ -1,0 +1,60 @@
+name: Fix documents card
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-documents-card.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Patch documents card touch target
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('App.tsx')
+          s = p.read_text()
+          old_import = "  Pressable,\n  SafeAreaView,"
+          new_import = "  Pressable,\n  TouchableOpacity,\n  SafeAreaView,"
+          if old_import not in s:
+              raise SystemExit('import anchor not found')
+          s = s.replace(old_import, new_import, 1)
+          old = '''        <Pressable onPress={onDocumentos} style={styles.docsCard}>
+          <View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>{documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} disponível${documentos.length === 1 ? '' : 'is'}` : 'Receitas, atestados e pedidos ficarão reunidos aqui.'}</Text></View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>'''
+          new = '''        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={onDocumentos}
+          style={styles.docsCard}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir meus documentos"
+        >
+          <View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>{documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} disponível${documentos.length === 1 ? '' : 'is'}` : 'Receitas, atestados e pedidos ficarão reunidos aqui.'}</Text></View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>'''
+          if old not in s:
+              raise SystemExit('documents card anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx
+          git commit -m "Fix documents card tap on iOS"
+          git push
