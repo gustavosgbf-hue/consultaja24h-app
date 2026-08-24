@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16c783' },
   eyebrow: { color: '#7fb49f', fontSize: 9, fontWeight: '800', letterSpacing: 1.1 },
   id: { color: '#5f716a', fontSize: 11, fontWeight: '600' },
-  title: { color: '#f0f6f3', fontSize: 19, fontWeight: '750' },
+  title: { color: '#f0f6f3', fontSize: 19, fontWeight: '700' },
   text: { color: '#9aaba4', fontSize: 13, lineHeight: 19, marginTop: 6 },
   patient: { color: '#71837b', fontSize: 11, marginTop: 10 },
   button: { height: 48, marginTop: 16, borderRadius: 14, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#16c783' },
