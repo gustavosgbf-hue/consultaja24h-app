@@ -1,0 +1,124 @@
+name: Install patient documents and history UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-patient-documents-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch patient history and documents UI
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # ---- types.ts ----
+          p = Path('src/types.ts')
+          s = p.read_text(encoding='utf-8')
+          if 'export type DocumentoPaciente' not in s:
+              marker = 'export type LoginResponse = {'
+              bloco = '''export type DocumentoPaciente = {\n  id: number;\n  atendimento_id: number;\n  arquivo_url: string;\n  arquivo_tipo?: string | null;\n  arquivo_nome?: string | null;\n  profissional_nome: string;\n  medico_nome?: string | null;\n  criado_em: string;\n  data_atendimento?: string | null;\n};\n\n'''
+              if marker not in s: raise SystemExit('types marker not found')
+              s = s.replace(marker, bloco + marker, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # ---- client.ts ----
+          p = Path('src/api/client.ts')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("import type { Agendamento, AtendimentoHistorico, Paciente } from '../types';", "import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from '../types';", 1)
+          if 'carregarDocumentosPaciente' not in s:
+              marker = '''export async function carregarHistoricoPaciente() {\n  return authenticatedFetch<{ ok: boolean; atendimentos: AtendimentoHistorico[] }>('/api/paciente/historico');\n}\n\n'''
+              bloco = marker + '''export async function carregarDocumentosPaciente() {\n  return authenticatedFetch<{ ok: boolean; documentos: DocumentoPaciente[] }>('/api/paciente/documentos');\n}\n\n'''
+              if marker not in s: raise SystemExit('client history marker not found')
+              s = s.replace(marker, bloco, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # ---- ChatPaciente.tsx read-only mode ----
+          p = Path('src/components/ChatPaciente.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("  onVoltar: () => void;\n};", "  onVoltar: () => void;\n  somenteLeitura?: boolean;\n};", 1)
+          s = s.replace("export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar }: Props) {", "export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, somenteLeitura = false }: Props) {", 1)
+          s = s.replace("    timer = setInterval(() => carregar(true), 3000);", "    if (!somenteLeitura) timer = setInterval(() => carregar(true), 3000);", 1)
+          s = s.replace("  }, [atendimentoId]);", "  }, [atendimentoId, somenteLeitura]);", 1)
+          s = s.replace("            <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.status}>ATENDIMENTO EM ANDAMENTO</Text></View>", "            <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.status}>{somenteLeitura ? 'HISTÓRICO DA CONSULTA' : 'ATENDIMENTO EM ANDAMENTO'}</Text></View>", 1)
+          s = s.replace("              <Text style={styles.noticeText}>Você está falando diretamente com o profissional responsável pelo seu atendimento.</Text>", "              <Text style={styles.noticeText}>{somenteLeitura ? 'Esta conversa foi encerrada e permanece disponível para consulta e acesso aos documentos.' : 'Você está falando diretamente com o profissional responsável pelo seu atendimento.'}</Text>", 1)
+          oldcomposer = '''        <View style={styles.composer}>\n          <TextInput\n            value={texto}\n            onChangeText={setTexto}\n            placeholder="Escreva uma mensagem..."\n            placeholderTextColor="#6f7d78"\n            style={styles.input}\n            multiline\n            maxLength={3000}\n            editable={!enviando}\n            returnKeyType="send"\n            submitBehavior="submit"\n            onSubmitEditing={enviar}\n          />\n          <Pressable onPress={enviar} disabled={!texto.trim() || enviando} style={[styles.send, (!texto.trim() || enviando) && styles.sendDisabled]}>\n            {enviando ? <ActivityIndicator color="#07100f" size="small" /> : <Text style={styles.sendText}>↑</Text>}\n          </Pressable>\n        </View>'''
+          newcomposer = '''        {!somenteLeitura ? (\n          <View style={styles.composer}>\n            <TextInput\n              value={texto}\n              onChangeText={setTexto}\n              placeholder="Escreva uma mensagem..."\n              placeholderTextColor="#6f7d78"\n              style={styles.input}\n              multiline\n              maxLength={3000}\n              editable={!enviando}\n              returnKeyType="send"\n              submitBehavior="submit"\n              onSubmitEditing={enviar}\n            />\n            <Pressable onPress={enviar} disabled={!texto.trim() || enviando} style={[styles.send, (!texto.trim() || enviando) && styles.sendDisabled]}>\n              {enviando ? <ActivityIndicator color="#07100f" size="small" /> : <Text style={styles.sendText}>↑</Text>}\n            </Pressable>\n          </View>\n        ) : null}'''
+          if oldcomposer not in s: raise SystemExit('Chat composer block not found')
+          s = s.replace(oldcomposer, newcomposer, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # ---- App.tsx ----
+          p = Path('App.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("  carregarHistoricoPaciente,\n  carregarPaciente,", "  carregarHistoricoPaciente,\n  carregarDocumentosPaciente,\n  carregarPaciente,", 1)
+          s = s.replace("import PagamentoConsulta from './src/components/PagamentoConsulta';", "import PagamentoConsulta from './src/components/PagamentoConsulta';\nimport ChatPaciente from './src/components/ChatPaciente';", 1)
+          s = s.replace("import type { Agendamento, AtendimentoHistorico, Paciente } from './src/types';", "import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';", 1)
+          s = s.replace("type Tela = 'home' | 'perfil' | 'nova-consulta';", "type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat';", 1)
+          s = s.replace("  const [historico, setHistorico] = useState<AtendimentoHistorico[]>([]);\n  const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);", "  const [historico, setHistorico] = useState<AtendimentoHistorico[]>([]);\n  const [documentos, setDocumentos] = useState<DocumentoPaciente[]>([]);\n  const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);\n  const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);", 1)
+          oldhome = '''      const [me, agenda, history] = await Promise.all([\n        carregarPaciente(),\n        carregarAgendamentos(),\n        carregarHistoricoPaciente().catch(() => ({ ok: true, atendimentos: [] })),\n      ]);\n      setPaciente(me.paciente);\n      setAgendamentos(agenda.agendamentos || []);\n      setHistorico(history.atendimentos || []);'''
+          newhome = '''      const [me, agenda, history, docs] = await Promise.all([\n        carregarPaciente(),\n        carregarAgendamentos(),\n        carregarHistoricoPaciente().catch(() => ({ ok: true, atendimentos: [] })),\n        carregarDocumentosPaciente().catch(() => ({ ok: true, documentos: [] })),\n      ]);\n      setPaciente(me.paciente);\n      setAgendamentos(agenda.agendamentos || []);\n      setHistorico(history.atendimentos || []);\n      setDocumentos(docs.documentos || []);'''
+          if oldhome not in s: raise SystemExit('App home load block not found')
+          s = s.replace(oldhome, newhome, 1)
+          s = s.replace("    setHistorico([]);\n    setTela('home');", "    setHistorico([]);\n    setDocumentos([]);\n    setHistoricoSelecionado(null);\n    setTela('home');", 1)
+
+          marker = '''  if (tela === 'nova-consulta') {\n    return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} />;\n  }\n\n'''
+          bloco = marker + '''  if (tela === 'documentos') {\n    return <DocumentosPaciente documentos={documentos} onVoltar={() => setTela('home')} onAbrirConsulta={(id) => {\n      const item = historico.find((h) => h.id === id) || null;\n      if (item) { setHistoricoSelecionado(item); setTela('historico-chat'); }\n    }} />;\n  }\n\n  if (tela === 'historico-chat' && historicoSelecionado) {\n    return (\n      <ChatPaciente\n        atendimentoId={historicoSelecionado.id}\n        medicoNome={historicoSelecionado.medico_nome || historicoSelecionado.profissional_nome}\n        somenteLeitura\n        onVoltar={() => { setTela('home'); setHistoricoSelecionado(null); }}\n      />\n    );\n  }\n\n'''
+          if marker not in s: raise SystemExit('App screen marker not found')
+          s = s.replace(marker, bloco, 1)
+
+          s = s.replace("      historico={historico}\n      loading={homeLoading}", "      historico={historico}\n      documentos={documentos}\n      loading={homeLoading}", 1)
+          s = s.replace("      onNovaConsulta={() => setTela('nova-consulta')}\n    />", "      onNovaConsulta={() => setTela('nova-consulta')}\n      onDocumentos={() => setTela('documentos')}\n      onAbrirAtendimento={(item) => { setHistoricoSelecionado(item); setTela('historico-chat'); }}\n    />", 1)
+
+          oldsig = "function PacienteHome({ paciente, agendamentos, historico, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta }: {"
+          newsig = "function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onAbrirAtendimento }: {"
+          if oldsig not in s: raise SystemExit('PacienteHome signature not found')
+          s = s.replace(oldsig, newsig, 1)
+          s = s.replace("  historico: AtendimentoHistorico[];\n  loading: boolean;", "  historico: AtendimentoHistorico[];\n  documentos: DocumentoPaciente[];\n  loading: boolean;", 1)
+          s = s.replace("  onNovaConsulta: () => void;\n}) {", "  onNovaConsulta: () => void;\n  onDocumentos: () => void;\n  onAbrirAtendimento: (item: AtendimentoHistorico) => void;\n}) {", 1)
+
+          s = s.replace("            <View style={styles.lastCard}>", "            <Pressable onPress={() => onAbrirAtendimento(ultimo)} style={styles.lastCard}>", 1)
+          s = s.replace("              <Text style={styles.lastSummary}>{resumirTexto(ultimo.triagem)}</Text>\n            </View>", "              <Text style={styles.lastSummary}>{resumirTexto(ultimo.triagem)}</Text>\n              <Text style={styles.openHistoryHint}>Ver conversa e documentos ›</Text>\n            </Pressable>", 1)
+          oldhist = '''          itensHistorico.map((item) => (\n            <View key={String(item.id)} style={styles.historyCard}>\n              <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>\n                <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>\n                <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>\n                <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>\n              </View></View>\n            </View>\n          ))'''
+          newhist = '''          itensHistorico.map((item) => (\n            <Pressable key={String(item.id)} onPress={() => onAbrirAtendimento(item)} style={styles.historyCard}>\n              <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>\n                <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>\n                <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>\n                <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>\n                <Text style={styles.historyOpen}>Abrir conversa ›</Text>\n              </View></View>\n            </Pressable>\n          ))'''
+          if oldhist not in s: raise SystemExit('history cards block not found')
+          s = s.replace(oldhist, newhist, 1)
+
+          olddocs = '''        <View style={styles.docsCard}>\n          <View style={styles.docsIcon}><Text style={styles.docsIconText}>+</Text></View>\n          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>Receitas, atestados e pedidos ficarão reunidos aqui.</Text></View>\n          <Text style={styles.chevron}>›</Text>\n        </View>'''
+          newdocs = '''        <Pressable onPress={onDocumentos} style={styles.docsCard}>\n          <View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>\n          <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>{documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} disponível${documentos.length === 1 ? '' : 'is'}` : 'Receitas, atestados e pedidos ficarão reunidos aqui.'}</Text></View>\n          <Text style={styles.chevron}>›</Text>\n        </Pressable>'''
+          if olddocs not in s: raise SystemExit('docs card block not found')
+          s = s.replace(olddocs, newdocs, 1)
+
+          insert_before = '''function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: () => void; onSair: () => void }) {'''
+          docs_component = '''function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {\n  documentos: DocumentoPaciente[];\n  onVoltar: () => void;\n  onAbrirConsulta: (atendimentoId: number) => void;\n}) {\n  return (\n    <SafeAreaView style={styles.safe}>\n      <ScrollView contentContainerStyle={styles.pageWrap}>\n        <PageHeader title="Meus documentos" onVoltar={onVoltar} />\n        <Text style={styles.pageLead}>Documentos recebidos nas suas consultas ficam disponíveis aqui e também dentro da conversa original.</Text>\n        {documentos.length ? documentos.map((doc) => (\n          <View key={String(doc.id)} style={styles.documentItem}>\n            <Pressable onPress={() => abrirLink(doc.arquivo_url)} style={styles.documentMain}>\n              <View style={styles.documentPdf}><Text style={styles.documentPdfText}>PDF</Text></View>\n              <View style={styles.documentInfo}>\n                <Text style={styles.documentName} numberOfLines={2}>{doc.arquivo_nome || 'Documento médico.pdf'}</Text>\n                <Text style={styles.documentMeta}>{doc.profissional_nome || 'Profissional da ConsultaJá24h'} · {formatarData(doc.criado_em)}</Text>\n              </View>\n              <Text style={styles.chevron}>›</Text>\n            </Pressable>\n            <Pressable onPress={() => onAbrirConsulta(doc.atendimento_id)} style={styles.documentConsultButton}>\n              <Text style={styles.documentConsultText}>Ver consulta original</Text>\n            </Pressable>\n          </View>\n        )) : (\n          <EmptyCard title="Nenhum documento ainda" text="Quando um profissional enviar um PDF pelo atendimento, ele aparecerá automaticamente aqui." />\n        )}\n      </ScrollView>\n    </SafeAreaView>\n  );\n}\n\n'''
+          if insert_before not in s: raise SystemExit('Perfil marker not found')
+          s = s.replace(insert_before, docs_component + insert_before, 1)
+
+          # Reuse existing stylesheet and append only new entries before the final closing of StyleSheet.create.
+          style_marker = "  docsText: {"
+          if 'documentItem:' not in s:
+              idx = s.find(style_marker)
+              if idx < 0: raise SystemExit('docsText style marker not found')
+              # add styles just before docsText to keep them near document styles
+              extra = '''  openHistoryHint: { marginTop: 12, color: '#68c99a', fontSize: 12, fontWeight: '700' },\n  historyOpen: { marginTop: 7, color: '#67bd94', fontSize: 11, fontWeight: '700' },\n  documentItem: { backgroundColor: '#0d1916', borderWidth: 1, borderColor: '#1b2b26', borderRadius: 18, marginBottom: 12, overflow: 'hidden' },\n  documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15 },\n  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#14231f', borderWidth: 1, borderColor: '#28463b' },\n  documentPdfText: { color: '#91b4a6', fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },\n  documentInfo: { flex: 1, minWidth: 0 },\n  documentName: { color: '#eef5f1', fontSize: 14, lineHeight: 19, fontWeight: '800' },\n  documentMeta: { color: '#76867f', fontSize: 11, marginTop: 4 },\n  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#192823' },\n  documentConsultText: { color: '#69c99a', fontSize: 12, fontWeight: '800' },\n'''
+              s = s[:idx] + extra + s[idx:]
+          p.write_text(s, encoding='utf-8')
+
+      - name: Typecheck
+        run: npm ci && npm run typecheck
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx src/types.ts src/api/client.ts src/components/ChatPaciente.tsx
+          git commit -m "Add patient documents and consultation history"
+          git push origin HEAD:main
