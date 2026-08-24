@@ -19,6 +19,7 @@ import {
   carregarHistoricoPaciente,
   carregarPaciente,
   conversarTriagem,
+  iniciarAtendimentoBeta,
   solicitarOtpPaciente,
   verificarOtpPaciente,
   type TriageMessage,
@@ -35,6 +36,7 @@ const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
 const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
 
 const PERGUNTA_DOCUMENTO = 'Você precisa de atestado, receita, declaração ou outro documento nesta consulta?';
+const BETA_TEST_PHONE = '98991344646';
 
 const SYSTEM_TRIAGE = `Você é o assistente de triagem do ConsultaJá24h para uma consulta médica por chat.
 O paciente já informou a queixa inicial. NÃO peça nome, telefone ou CPF.
@@ -541,6 +543,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   const [respostaTriagem, setRespostaTriagem] = useState('');
   const [triagemResumo, setTriagemResumo] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
+  const [iniciandoBeta, setIniciandoBeta] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
 
   const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
@@ -573,9 +576,36 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     return true;
   }
 
-  function irParaPagamento() {
-    if (!validarDados()) return;
-    setEtapaConsulta('pagamento');
+  async function irParaPagamento() {
+    if (!validarDados() || iniciandoBeta) return;
+
+    const beta = digits(paciente.tel).slice(-11) === BETA_TEST_PHONE;
+    if (!beta) {
+      setEtapaConsulta('pagamento');
+      return;
+    }
+
+    setIniciandoBeta(true);
+    try {
+      const data = await iniciarAtendimentoBeta({
+        nome: pacienteNomeSelecionado,
+        cpf: pacienteCpfSelecionado,
+        email: paciente.email || undefined,
+        dataNascimento: pacienteNascimentoSelecionado,
+        atendimentoParaTerceiro: para === 'outra-pessoa',
+      });
+      if (!data.ok || !data.beta || !data.atendimentoId) {
+        throw new Error('Não foi possível iniciar o atendimento beta.');
+      }
+      await iniciarTriagemAposPagamento(data.atendimentoId);
+    } catch (error) {
+      Alert.alert(
+        'Não foi possível iniciar a consulta',
+        error instanceof Error ? error.message : 'Tente novamente em instantes.',
+      );
+    } finally {
+      setIniciandoBeta(false);
+    }
   }
 
   async function iniciarTriagemAposPagamento(atendimentoId: number) {
@@ -819,7 +849,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
           <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem pelo próprio app." last />
         </View>
 
-        <PrimaryButton label="Continuar para pagamento" loading={false} onPress={irParaPagamento} />
+        <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta} onPress={irParaPagamento} />
       </ScrollView>
     </SafeAreaView>
   );
