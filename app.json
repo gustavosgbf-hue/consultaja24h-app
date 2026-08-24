@@ -8,12 +8,29 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.consultaja24h.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.consultaja24h.app",
       "versionCode": 1
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a97b44ed-ec7f-45ce-adc5-0f7b87cf1bf9"
+      }
+    },
+    "owner": "consultaja24hs-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a97b44ed-ec7f-45ce-adc5-0f7b87cf1bf9"
+    }
   }
 }
