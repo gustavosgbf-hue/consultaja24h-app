@@ -1,5 +1,5 @@
 {
-  "action": "finalize_release",
-  "message": "Prevent simultaneous consultations and preserve closed chat read-only",
-  "requested_at": "2026-08-25T04:55:00-03:00"
+  "action": "ota",
+  "message": "Hide duplicate renewal site header inside app WebView",
+  "requested_at": "2026-08-25T05:08:00-03:00"
 }
