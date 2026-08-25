@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   DynamicColorIOS,
   Platform,
   Pressable,
@@ -108,10 +109,18 @@ export default function AppRoot() {
     }
 
     recuperar();
+    const startup1 = setTimeout(recuperar, 500);
+    const startup2 = setTimeout(recuperar, 1400);
     const timer = setInterval(recuperar, 3000);
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recuperar();
+    });
     return () => {
       ativo = false;
+      clearTimeout(startup1);
+      clearTimeout(startup2);
       clearInterval(timer);
+      appStateSubscription.remove();
     };
   }, []);
 

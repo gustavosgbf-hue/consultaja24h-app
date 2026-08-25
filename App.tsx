@@ -247,19 +247,34 @@ export default function App() {
 
   async function carregarHome() {
     setHomeLoading(true);
+    const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    async function comRetry<T>(fn: () => Promise<T>, tentativas = 3): Promise<T | null> {
+      for (let i = 0; i < tentativas; i += 1) {
+        try {
+          return await fn();
+        } catch {
+          if (i < tentativas - 1) await esperar(450 * (i + 1));
+        }
+      }
+      return null;
+    }
+
     try {
-      const [me, agenda, history, docs, renewalData] = await Promise.all([
-        carregarPaciente(),
-        carregarAgendamentos(),
-        carregarHistoricoPaciente().catch(() => ({ ok: true, atendimentos: [] })),
-        carregarDocumentosPaciente().catch(() => ({ ok: true, documentos: [] })),
-        carregarRenovacoesPaciente().catch(() => ({ ok: true, renovacoes: [] })),
-      ]);
+      const me = await comRetry(carregarPaciente);
+      if (!me?.paciente) return;
       setPaciente(me.paciente);
-      setAgendamentos(agenda.agendamentos || []);
-      setHistorico(history.atendimentos || []);
-      setDocumentos(docs.documentos || []);
-      setRenovacoes(renewalData.renovacoes || []);
+
+      const [agenda, history, docs, renewalData] = await Promise.all([
+        comRetry(carregarAgendamentos),
+        comRetry(carregarHistoricoPaciente),
+        comRetry(carregarDocumentosPaciente),
+        comRetry(carregarRenovacoesPaciente),
+      ]);
+
+      if (agenda) setAgendamentos(agenda.agendamentos || []);
+      if (history) setHistorico(history.atendimentos || []);
+      if (docs) setDocumentos(docs.documentos || []);
+      if (renewalData) setRenovacoes(renewalData.renovacoes || []);
     } finally {
       setHomeLoading(false);
     }
@@ -1483,9 +1498,9 @@ const styles = StyleSheet.create({
   activeCareAction: { color: '#16c783', fontSize: 12.5, fontWeight: '600', marginTop: 11 },
   quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#f0f5f2', '#0c1816'), padding: 15 },
-  quickCardFeatured: { borderColor: '#346342', backgroundColor: '#101d14' },
+  quickCardFeatured: { borderColor: themeColor('#cfe1d6', '#346342'), backgroundColor: themeColor('#e3eee7', '#101d14') },
   quickTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '700' },
-  quickTitleFeatured: { color: '#dfff9e' },
+  quickTitleFeatured: { color: themeColor('#18724f', '#dfff9e') },
   quickSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   quickArrow: { color: '#16c783', fontSize: 20, marginTop: 'auto' },
   quickCardPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
