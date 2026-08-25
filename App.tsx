@@ -28,6 +28,7 @@ import {
   carregarHistoricoPaciente,
   carregarDocumentosPaciente,
   carregarPaciente,
+  carregarAtendimentoEmAndamento,
   completarPerfilPaciente,
   carregarRenovacoesPaciente,
   carregarRenovacaoPaciente,
@@ -155,7 +156,7 @@ function mascararEmail(email?: string | null) {
 function mascararCpf(cpf?: string | null) {
   const n = digits(cpf);
   if (n.length !== 11) return cpf || 'Não informado';
-  return `***.${n.slice(3, 6)}.${n.slice(6, 9)}-**`;
+  return formatarCpf(n);
 }
 
 function mascararTelefone(tel?: string | null) {
@@ -182,7 +183,7 @@ async function abrirLink(url: string) {
 }
 
 async function abrirSuporte() {
-  const mensagem = encodeURIComponent('Olá, preciso de ajuda com o ConsultaJá24h.');
+  const mensagem = encodeURIComponent('Olá, preciso de ajuda com meu atendimento.');
   await abrirLink(`https://wa.me/${SUPPORT_WHATSAPP}?text=${mensagem}`);
 }
 
@@ -619,12 +620,14 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
           </Pressable>
         ) : null}
 
-        <View style={styles.heroCard}>
-          <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.heroEyebrow}>MÉDICO ONLINE AGORA</Text></View>
-          <Text style={styles.heroTitle}>Consulta por chat, direto pelo app.</Text>
-          <Text style={styles.heroText}>Sem videochamada. Sem precisar agendar.</Text>
-          <Pressable onPress={onNovaConsulta} style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}><Text style={styles.primaryButtonText}>Falar com um médico agora</Text></Pressable>
-        </View>
+        {!atendimentoAtivo ? (
+          <View style={styles.heroCard}>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.heroEyebrow}>MÉDICO ONLINE AGORA</Text></View>
+            <Text style={styles.heroTitle}>Consulta por chat, direto pelo app.</Text>
+            <Text style={styles.heroText}>Sem videochamada. Sem precisar agendar.</Text>
+            <Pressable onPress={onNovaConsulta} style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}><Text style={styles.primaryButtonText}>Falar com um médico agora</Text></Pressable>
+          </View>
+        ) : null}
 
         <View style={styles.quickGrid}>
           <QuickCard title="Renovar receita" subtitle="Solicite pelo app" onPress={onRenovacao} featured />
@@ -885,6 +888,21 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={styles.supportArrow}>›</Text>
         </Pressable>
 
+        <Pressable onPress={abrirSuporte} style={({ pressed }) => [styles.supportButton, pressed && { opacity: 0.82 }]} accessibilityRole="button" accessibilityLabel="Falar com o suporte">
+          <View style={styles.supportIcon}>
+            <View style={styles.supportBubble}>
+              <View style={styles.supportBubbleDot} />
+              <View style={styles.supportBubbleDot} />
+              <View style={styles.supportBubbleDot} />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportTitle}>Suporte</Text>
+            <Text style={styles.supportText}>Fale com a equipe da ConsultaJá24h</Text>
+          </View>
+          <Text style={styles.supportArrow}>›</Text>
+        </Pressable>
+
         <View style={styles.profileNotice}>
           <Text style={styles.profileNoticeTitle}>Privacidade</Text>
           <Text style={styles.profileNoticeText}>Seus dados clínicos e documentos são vinculados ao paciente, não ao titular do cartão usado no pagamento.</Text>
@@ -995,6 +1013,17 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
 
   async function irParaPagamento() {
     if (!validarDados() || iniciandoBeta || salvandoPerfil) return;
+
+    try {
+      const existente = await carregarAtendimentoEmAndamento();
+      if (existente.atendimento) {
+        Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');
+        onVoltar();
+        return;
+      }
+    } catch {
+      // Se a checagem temporária falhar, o fluxo existente continua normalmente.
+    }
 
     if (para === 'mim' && perfilIncompleto) {
       setSalvandoPerfil(true);

@@ -78,6 +78,9 @@ export default function AppRoot() {
         const atual = data.atendimento || null;
 
         if (!atual) {
+          if (etapaRef.current === 'chat' && !chatFechadoManualRef.current) {
+            return;
+          }
           atendimentoIdRef.current = null;
           etapaRef.current = null;
           chatFechadoManualRef.current = false;
