@@ -1,5 +1,5 @@
 {
-  "action": "finalize_release",
-  "message": "Patient profile completion and simpler consultation form",
-  "requested_at": "2026-08-25T04:09:00-03:00"
+  "action": "ota",
+  "message": "Compact personal data card and improve CPF legibility",
+  "requested_at": "2026-08-25T04:22:30-03:00"
 }
