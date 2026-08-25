@@ -2,6 +2,7 @@ import {
   ActivityIndicator,
   DynamicColorIOS,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -25,6 +26,15 @@ function themeColor(light: string, dark: string) {
 }
 
 export default function DocumentViewer({ visible, url, name, type = 'pdf', onClose }: Props) {
+  async function openExternal() {
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // O documento permanece aberto no visualizador interno se o sistema não conseguir abrir externamente.
+    }
+  }
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.safe}>
@@ -33,7 +43,9 @@ export default function DocumentViewer({ visible, url, name, type = 'pdf', onClo
             <Text style={styles.backText}>‹</Text>
           </Pressable>
           <Text style={styles.title} numberOfLines={1}>{name || 'Documento'}</Text>
-          <View style={{ width: 42 }} />
+          <Pressable onPress={openExternal} style={styles.external} accessibilityLabel="Abrir documento no navegador">
+            <Text style={styles.externalText}>↗</Text>
+          </Pressable>
         </View>
         {type === 'imagem' && url ? (
           <View style={styles.imageWrap}><Image source={{ uri: url }} style={styles.image} resizeMode="contain" /></View>
@@ -51,13 +63,15 @@ export default function DocumentViewer({ visible, url, name, type = 'pdf', onClo
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  safe: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
   header: { minHeight: 64, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
+  back: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dfe8e3', '#0d1916') },
   backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
-  title: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '800' },
-  webview: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
-  loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
-  imageWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef2f0', '#040807') },
+  title: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '700' },
+  external: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dfe8e3', '#0d1916') },
+  externalText: { color: themeColor('#18724f', '#78f25f'), fontSize: 22, fontWeight: '500', marginTop: -2 },
+  webview: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e8efeb', '#07100f') },
+  imageWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e2e9e5', '#040807') },
   image: { width: '100%', height: '100%' },
 });
