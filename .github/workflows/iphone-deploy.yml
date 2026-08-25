@@ -1,0 +1,122 @@
+name: iPhone Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: O que deseja fazer?
+        required: true
+        type: choice
+        options:
+          - ota
+          - ios_build
+          - submit_testflight
+        default: ota
+      message:
+        description: Mensagem da OTA (usada apenas em ota)
+        required: false
+        type: string
+        default: Atualização do app
+
+concurrency:
+  group: iphone-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validar projeto
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Verify Expo authentication
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN não está configurado no repositório."
+            exit 1
+          fi
+          npx eas-cli@latest whoami
+
+  ota:
+    name: Publicar OTA
+    if: ${{ inputs.action == 'ota' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish production OTA
+        run: npx eas-cli@latest update --channel production --message "${{ inputs.message }}" --non-interactive
+
+  ios_build:
+    name: Gerar build iOS
+    if: ${{ inputs.action == 'ios_build' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start production iOS build
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive --no-wait
+
+  submit_testflight:
+    name: Enviar última build ao TestFlight
+    if: ${{ inputs.action == 'submit_testflight' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Submit latest iOS build
+        run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
