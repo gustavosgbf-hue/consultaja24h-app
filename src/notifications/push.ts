@@ -15,6 +15,7 @@ Notifications.setNotificationHandler({
 });
 
 let ultimoTokenRegistrado = '';
+let ultimaSessaoRegistrada = '';
 let registrando = false;
 
 export async function registrarPushDoPaciente() {
@@ -43,9 +44,10 @@ export async function registrarPushDoPaciente() {
     const token = await Notifications.getExpoPushTokenAsync({ projectId: PROJECT_ID });
     const value = String(token.data || '');
     if (!value) return null;
-    if (value !== ultimoTokenRegistrado) {
+    if (value !== ultimoTokenRegistrado || session !== ultimaSessaoRegistrada) {
       await registrarPushTokenPaciente(value, Platform.OS);
       ultimoTokenRegistrado = value;
+      ultimaSessaoRegistrada = session;
     }
     return value;
   } catch (error) {
