@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   DynamicColorIOS,
   KeyboardAvoidingView,
   Linking,
@@ -327,11 +328,7 @@ export default function App() {
   }
 
   if (booting) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#16c783" />
-      </SafeAreaView>
-    );
+    return <AppSkeleton />;
   }
 
   if (!paciente) {
@@ -507,7 +504,7 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
 
         <SectionHeader title="Meus atendimentos" action={historico.length > 4 ? (mostrarTudo ? 'Ver menos' : 'Ver todos') : undefined} onAction={onMostrarTudo} />
         {loading && historico.length === 0 ? (
-          <ActivityIndicator color="#16c783" style={{ marginVertical: 24 }} />
+          <HomeHistorySkeleton />
         ) : itensHistorico.length ? (
           itensHistorico.map((item) => (
             <Pressable key={String(item.id)} onPress={() => onAbrirAtendimento(item)} style={styles.historyCard}>
@@ -983,9 +980,79 @@ function EmptyCard({ title, text }: { title: string; text: string }) {
   return <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{text}</Text></View>;
 }
 
+function SkeletonPulse({ children }: { children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0.42)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(opacity, { toValue: 0.82, duration: 720, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0.42, duration: 720, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
+}
+
+function HomeHistorySkeleton() {
+  return (
+    <SkeletonPulse>
+      <View style={styles.skeletonHistoryCard}>
+        <View style={styles.skeletonDot} />
+        <View style={{ flex: 1 }}>
+          <View style={[styles.skeletonLine, { width: '48%', height: 13 }]} />
+          <View style={[styles.skeletonLine, { width: '30%', height: 9, marginTop: 9 }]} />
+          <View style={[styles.skeletonLine, { width: '88%', height: 10, marginTop: 13 }]} />
+          <View style={[styles.skeletonLine, { width: '68%', height: 10, marginTop: 7 }]} />
+        </View>
+      </View>
+      <View style={[styles.skeletonHistoryCard, { opacity: 0.72 }]}>
+        <View style={styles.skeletonDot} />
+        <View style={{ flex: 1 }}>
+          <View style={[styles.skeletonLine, { width: '42%', height: 13 }]} />
+          <View style={[styles.skeletonLine, { width: '26%', height: 9, marginTop: 9 }]} />
+          <View style={[styles.skeletonLine, { width: '80%', height: 10, marginTop: 13 }]} />
+        </View>
+      </View>
+    </SkeletonPulse>
+  );
+}
+
+function AppSkeleton() {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.skeletonPage}>
+        <SkeletonPulse>
+          <View style={styles.skeletonTop}>
+            <View>
+              <View style={[styles.skeletonLine, { width: 92, height: 9 }]} />
+              <View style={[styles.skeletonLine, { width: 150, height: 25, marginTop: 9 }]} />
+              <View style={[styles.skeletonLine, { width: 126, height: 10, marginTop: 9 }]} />
+            </View>
+            <View style={styles.skeletonAvatar} />
+          </View>
+          <View style={styles.skeletonHero}>
+            <View style={[styles.skeletonLine, { width: 86, height: 9 }]} />
+            <View style={[styles.skeletonLine, { width: '83%', height: 20, marginTop: 15 }]} />
+            <View style={[styles.skeletonLine, { width: '68%', height: 20, marginTop: 8 }]} />
+            <View style={[styles.skeletonLine, { width: '92%', height: 10, marginTop: 15 }]} />
+            <View style={[styles.skeletonLine, { width: '74%', height: 10, marginTop: 7 }]} />
+            <View style={styles.skeletonButton} />
+          </View>
+          <View style={styles.skeletonGrid}>
+            <View style={styles.skeletonQuick} />
+            <View style={styles.skeletonQuick} />
+          </View>
+          <View style={[styles.skeletonLine, { width: 170, height: 17, marginBottom: 13 }]} />
+          <View style={styles.skeletonLast} />
+        </SkeletonPulse>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  safe: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef3f0', '#07100f') },
   loginWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
   brandBlock: { marginBottom: 22 },
   brand: { color: themeColor('#14201d', '#fff'), fontSize: 34, fontWeight: '700', letterSpacing: -1.2 },
@@ -1020,14 +1087,14 @@ const styles = StyleSheet.create({
   homeSubtitle: { color: themeColor('#66736e', '#8a97a6'), fontSize: 14, marginTop: 4 },
   avatarButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#c6ddd2', '#275044'), alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 17, fontWeight: '800' },
-  heroCard: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#cbe2d7', '#21483c'), borderRadius: 24, padding: 22, marginBottom: 14 },
+  heroCard: { backgroundColor: themeColor('#e7efe9', '#10201d'), borderRadius: 24, padding: 22, marginBottom: 14 },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#78f25f' },
   heroEyebrow: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '800', letterSpacing: 1.1 },
   heroTitle: { color: themeColor('#14201d', '#fff'), fontSize: 25, fontWeight: '800', lineHeight: 31, marginTop: 10, letterSpacing: -.35 },
   heroText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 21, marginTop: 9, marginBottom: 14 },
   quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), padding: 15 },
+  quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#f7faf8', '#0c1816'), padding: 15 },
   quickCardFeatured: { borderColor: '#346342', backgroundColor: '#101d14' },
   quickTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
   quickTitleFeatured: { color: '#dfff9e' },
@@ -1036,27 +1103,27 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 },
   sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 19, fontWeight: '800' },
   sectionAction: { color: '#16c783', fontSize: 13, fontWeight: '700' },
-  lastCard: { backgroundColor: '#f7fbf8', borderRadius: 20, padding: 18, marginBottom: 27 },
+  lastCard: { backgroundColor: themeColor('#f5f8f6', '#0d1916'), borderRadius: 20, padding: 18, marginBottom: 27 },
   lastTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   datePill: { backgroundColor: '#e5f7eb', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   datePillText: { color: '#18724f', fontSize: 11, fontWeight: '800' },
   statusText: { color: themeColor('#66736e', '#75827e'), fontSize: 11, fontWeight: '700' },
-  lastDoctor: { color: '#14201d', fontSize: 17, fontWeight: '800', marginTop: 14 },
-  lastSummary: { color: '#596763', lineHeight: 20, marginTop: 6 },
+  lastDoctor: { color: themeColor('#14201d', '#eef5f1'), fontSize: 17, fontWeight: '800', marginTop: 14 },
+  lastSummary: { color: themeColor('#596763', '#94a39d'), lineHeight: 20, marginTop: 6 },
   historyCard: { marginBottom: 9 },
-  historyLine: { flexDirection: 'row', backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 17, padding: 15 },
+  historyLine: { flexDirection: 'row', backgroundColor: themeColor('#f8faf9', '#0c1816'), borderRadius: 17, padding: 15 },
   timelineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#16c783', marginTop: 5, marginRight: 12 },
   historyBody: { flex: 1 },
   historyTitle: { color: themeColor('#14201d', '#fff'), fontWeight: '800', fontSize: 15 },
   historyMeta: { color: '#769087', fontSize: 12, marginTop: 4 },
   historyText: { color: themeColor('#596763', '#9ba9a4'), fontSize: 13, lineHeight: 19, marginTop: 8 },
-  emptyCard: { borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), backgroundColor: themeColor('#ffffff', '#0b1715'), borderRadius: 16, padding: 18, marginBottom: 24 },
+  emptyCard: { backgroundColor: themeColor('#f7faf8', '#0c1816'), borderRadius: 16, padding: 18, marginBottom: 24 },
   emptyTitle: { color: themeColor('#14201d', '#fff'), fontWeight: '700' },
   emptyText: { color: themeColor('#66736e', '#8a97a6'), marginTop: 5, lineHeight: 19 },
-  appointmentCard: { borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), backgroundColor: themeColor('#ffffff', '#0b1715'), borderRadius: 16, padding: 17, marginBottom: 10 },
+  appointmentCard: { backgroundColor: themeColor('#f7faf8', '#0c1816'), borderRadius: 16, padding: 17, marginBottom: 10 },
   appointmentName: { color: themeColor('#14201d', '#fff'), fontWeight: '700', fontSize: 16 },
   appointmentMeta: { color: themeColor('#5f6c67', '#a9b5b0'), marginTop: 5 },
-  docsCard: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginTop: 25 },
+  docsCard: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: themeColor('#f4f8f5', '#0d1916'), borderRadius: 18, padding: 16, marginTop: 25 },
   docsIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: themeColor('#e7f7ee', '#123027'), alignItems: 'center', justifyContent: 'center' },
   docsIconText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 25, fontWeight: '400', marginTop: -2 },
   docsGlyph: { width: 18, height: 22, borderWidth: 1.7, borderColor: themeColor('#0b8f61', '#78f25f'), borderRadius: 3, paddingTop: 8, paddingHorizontal: 3 },
@@ -1066,19 +1133,30 @@ const styles = StyleSheet.create({
   docsTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
   openHistoryHint: { marginTop: 12, color: '#68c99a', fontSize: 12, fontWeight: '700' },
   historyOpen: { marginTop: 7, color: '#67bd94', fontSize: 11, fontWeight: '700' },
-  documentItem: { backgroundColor: themeColor('#ffffff', '#0d1916'), borderWidth: 1, borderColor: themeColor('#dfe7e2', '#1b2b26'), borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
+  documentItem: { backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
   documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15 },
-  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef4f1', '#14231f'), borderWidth: 1, borderColor: '#28463b' },
+  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e8f1ec', '#14231f') },
   documentPdfText: { color: '#91b4a6', fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   documentInfo: { flex: 1, minWidth: 0 },
   documentName: { color: themeColor('#14201d', '#eef5f1'), fontSize: 14, lineHeight: 19, fontWeight: '800' },
   documentMeta: { color: themeColor('#66736e', '#76867f'), fontSize: 11, marginTop: 4 },
-  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: themeColor('#e0e8e4', '#192823') },
+  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#edf3ef', '#101e1a') },
   documentConsultText: { color: '#69c99a', fontSize: 12, fontWeight: '800' },
   docsText: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 3 },
   chevron: { color: '#66736e', fontSize: 27 },
   refreshButton: { alignItems: 'center', marginTop: 22, paddingVertical: 12 },
   refreshText: { color: themeColor('#66736e', '#71807b'), fontWeight: '700', fontSize: 13 },
+  skeletonPage: { flex: 1, paddingHorizontal: 20, paddingTop: 12, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  skeletonTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  skeletonLine: { borderRadius: 999, backgroundColor: themeColor('#d7e1dc', '#1b2925') },
+  skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: themeColor('#d7e1dc', '#172823') },
+  skeletonHero: { minHeight: 225, borderRadius: 24, padding: 22, backgroundColor: themeColor('#e3ebe6', '#0f1d19'), marginBottom: 14 },
+  skeletonButton: { height: 48, borderRadius: 15, backgroundColor: themeColor('#d0dbd5', '#193027'), marginTop: 20 },
+  skeletonGrid: { flexDirection: 'row', gap: 10, marginBottom: 30 },
+  skeletonQuick: { flex: 1, height: 116, borderRadius: 18, backgroundColor: themeColor('#e1e8e4', '#0c1816') },
+  skeletonLast: { height: 150, borderRadius: 20, backgroundColor: themeColor('#e1e8e4', '#0d1916') },
+  skeletonHistoryCard: { minHeight: 120, flexDirection: 'row', borderRadius: 17, padding: 15, marginBottom: 9, backgroundColor: themeColor('#e4ebe7', '#0c1816') },
+  skeletonDot: { width: 9, height: 9, borderRadius: 5, marginTop: 3, marginRight: 12, backgroundColor: themeColor('#c6d3cc', '#20352e') },
 
   pageWrap: { padding: 20, paddingBottom: 50 },
   pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
