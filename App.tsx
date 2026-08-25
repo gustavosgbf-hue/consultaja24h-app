@@ -8,6 +8,7 @@ import {
   Linking,
   Platform,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -148,6 +149,32 @@ async function abrirLink(url: string) {
   } catch {
     Alert.alert('Não foi possível abrir', 'Tente novamente em instantes.');
   }
+}
+
+function usePageSlide(onClose: () => void) {
+  const x = useRef(new Animated.Value(28)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(x, { toValue: 0, duration: 230, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 190, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, x]);
+
+  function close() {
+    Animated.parallel([
+      Animated.timing(x, { toValue: 34, duration: 170, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 145, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) onClose();
+    });
+  }
+
+  return {
+    style: { flex: 1, opacity, transform: [{ translateX: x }] },
+    close,
+  };
 }
 
 export default function App() {
@@ -412,7 +439,7 @@ export default function App() {
       <ChatPaciente
         atendimentoId={historicoSelecionado.id}
         medicoNome={historicoSelecionado.medico_nome || historicoSelecionado.profissional_nome}
-        somenteLeitura
+        somenteLeitura={String(historicoSelecionado.status || '').trim().toLowerCase() !== 'assumido'}
         onVoltar={() => { setTela(historicoOrigem === 'documentos' ? 'documentos' : 'home'); setHistoricoSelecionado(null); }}
       />
     );
@@ -451,7 +478,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
   onAbrirAtendimento: (item: AtendimentoHistorico) => void;
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
-  const ultimo = historico[0];
+  const atendimentoAtivo = historico.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
+  const ultimo = historico.find((item) => String(item.status || '').trim().toLowerCase() !== 'assumido');
   const itensHistorico = mostrarTudo ? historico : historico.slice(0, 4);
   const proximos = useMemo(
     () => agendamentos.filter((item) => new Date(item.horario_agendado).getTime() >= Date.now()).slice(0, 2),
@@ -460,7 +488,11 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.home} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.home}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={onAtualizar} tintColor="#16c783" colors={["#16c783"]} />}
+      >
         <View style={styles.topbar}>
           <View>
             <Text style={styles.kicker}>CONSULTAJÁ24H</Text>
@@ -475,11 +507,20 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
           </View>
         </View>
 
+        {atendimentoAtivo ? (
+          <Pressable onPress={() => onAbrirAtendimento(atendimentoAtivo)} style={({ pressed }) => [styles.activeCareCard, pressed && styles.primaryPressed]}>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.activeCareEyebrow}>ATENDIMENTO EM ANDAMENTO</Text></View>
+            <Text style={styles.activeCareTitle}>Continuar atendimento</Text>
+            <Text style={styles.activeCareText}>{atendimentoAtivo.medico_nome ? 'Voltar para a conversa com ' + atendimentoAtivo.medico_nome + '.' : 'Voltar para a conversa com o médico.'}</Text>
+            <Text style={styles.activeCareAction}>Abrir conversa ›</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.heroCard}>
-          <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.heroEyebrow}>MÉDICO ONLINE</Text></View>
-          <Text style={styles.heroTitle}>Atendimento por chat, sem precisar sair de casa.</Text>
-          <Text style={styles.heroText}>Você paga, faz uma triagem rápida e entra na fila. O atendimento acontecerá pelo próprio app.</Text>
-          <Pressable onPress={onNovaConsulta} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Consultar agora</Text></Pressable>
+          <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.heroEyebrow}>MÉDICO ONLINE AGORA</Text></View>
+          <Text style={styles.heroTitle}>Consulta por chat, direto pelo app.</Text>
+          <Text style={styles.heroText}>Sem videochamada. Sem precisar agendar.</Text>
+          <Pressable onPress={onNovaConsulta} style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}><Text style={styles.primaryButtonText}>Falar com um médico agora</Text></Pressable>
         </View>
 
         <View style={styles.quickGrid}>
@@ -506,16 +547,18 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
         {loading && historico.length === 0 ? (
           <HomeHistorySkeleton />
         ) : itensHistorico.length ? (
-          itensHistorico.map((item) => (
-            <Pressable key={String(item.id)} onPress={() => onAbrirAtendimento(item)} style={styles.historyCard}>
-              <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>
-                <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>
-                <Text style={styles.historyMeta}>{formatarData(item.criado_em)} · {item.tipo || 'chat'}</Text>
-                <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>
-                <Text style={styles.historyOpen}>Abrir conversa ›</Text>
-              </View></View>
-            </Pressable>
-          ))
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.historyCarousel} snapToInterval={286} decelerationRate="fast">
+            {itensHistorico.map((item) => (
+              <Pressable key={String(item.id)} onPress={() => onAbrirAtendimento(item)} style={[styles.historyCard, styles.historyCardHorizontal]}>
+                <View style={styles.historyLine}><View style={styles.timelineDot} /><View style={styles.historyBody}>
+                  <Text style={styles.historyTitle}>{item.medico_nome || 'Atendimento médico'}</Text>
+                  <Text style={styles.historyMeta}>{formatarData(item.criado_em)}</Text>
+                  <Text style={styles.historyText}>{resumirTexto(item.triagem, 105)}</Text>
+                  <Text style={styles.historyOpen}>Abrir conversa ›</Text>
+                </View></View>
+              </Pressable>
+            ))}
+          </ScrollView>
         ) : (
           <EmptyCard title="Seu histórico aparecerá aqui" text="Os atendimentos vinculados ao seu cadastro ficam organizados no app." />
         )}
@@ -544,7 +587,6 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
           <Text style={styles.chevron}>›</Text>
         </Pressable>
 
-        <Pressable onPress={onAtualizar} style={styles.refreshButton}><Text style={styles.refreshText}>Atualizar dados</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -556,11 +598,13 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
   onAbrirConsulta: (atendimentoId: number) => void;
 }) {
   const [docAberto, setDocAberto] = useState<DocumentoPaciente | null>(null);
+  const motion = usePageSlide(onVoltar);
 
   return (
+    <Animated.View style={motion.style}>
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageWrap}>
-        <PageHeader title="Meus documentos" onVoltar={onVoltar} />
+        <PageHeader title="Meus documentos" onVoltar={motion.close} />
         <Text style={styles.pageLead}>Documentos recebidos nas suas consultas ficam disponíveis aqui e também dentro da conversa original.</Text>
         {documentos.length ? documentos.map((doc) => (
           <View key={String(doc.id)} style={styles.documentItem}>
@@ -588,15 +632,18 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
         onClose={() => setDocAberto(null)}
       />
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
 function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: () => void; onSair: () => void }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
+  const motion = usePageSlide(onVoltar);
   return (
+    <Animated.View style={motion.style}>
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageWrap}>
-        <PageHeader title="Meu perfil" onVoltar={onVoltar} />
+        <PageHeader title="Meu perfil" onVoltar={motion.close} />
         <View style={styles.profileHero}>
           <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{primeiroNome.slice(0, 1).toUpperCase()}</Text></View>
           <Text style={styles.profileName}>{paciente.nome}</Text>
@@ -617,6 +664,7 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -634,6 +682,28 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   const [triagemLoading, setTriagemLoading] = useState(false);
   const [iniciandoBeta, setIniciandoBeta] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
+  const motion = usePageSlide(onVoltar);
+  const stageX = useRef(new Animated.Value(0)).current;
+  const stageOpacity = useRef(new Animated.Value(1)).current;
+
+  function mudarEtapa(next: EtapaConsulta, direction: 1 | -1 = 1) {
+    Animated.parallel([
+      Animated.timing(stageX, { toValue: direction === 1 ? -28 : 28, duration: 150, useNativeDriver: true }),
+      Animated.timing(stageOpacity, { toValue: 0, duration: 120, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      setEtapaConsulta(next);
+      stageX.setValue(direction === 1 ? 28 : -28);
+      requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(stageX, { toValue: 0, duration: 220, useNativeDriver: true }),
+          Animated.timing(stageOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        ]).start();
+      });
+    });
+  }
+
+  const stageStyle = { opacity: stageOpacity, transform: [{ translateX: stageX }] };
 
   const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
   const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
@@ -670,7 +740,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
     const beta = digits(paciente.tel).slice(-11) === BETA_TEST_PHONE;
     if (!beta) {
-      setEtapaConsulta('pagamento');
+      mudarEtapa('pagamento', 1);
       return;
     }
 
@@ -703,7 +773,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
       { role: 'user', content: `Queixa inicial informada pelo paciente: ${queixa.trim()}` },
     ];
     setTriagemLoading(true);
-    setEtapaConsulta('triagem');
+    mudarEtapa('triagem', 1);
     setTriageMessages(history);
     setPerguntaAtual('');
     setRespostaTriagem('');
@@ -733,7 +803,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         triagem: resumo || queixa.trim(),
         atendimentoParaTerceiro: para === 'outra-pessoa',
       });
-      setEtapaConsulta('fila');
+      mudarEtapa('fila', 1);
     } catch (error) {
       Alert.alert('Triagem concluída', 'A triagem terminou, mas não conseguimos salvar o resumo no atendimento. Tente novamente.');
     } finally {
@@ -786,9 +856,9 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   }
 
   function voltarEtapa() {
-    if (etapaConsulta === 'dados') return onVoltar();
-    if (etapaConsulta === 'pagamento') return setEtapaConsulta('dados');
-    if (etapaConsulta === 'fila') return onVoltar();
+    if (etapaConsulta === 'dados') return motion.close();
+    if (etapaConsulta === 'pagamento') return mudarEtapa('dados', -1);
+    if (etapaConsulta === 'fila') return motion.close();
     if (etapaConsulta === 'triagem') {
       Alert.alert('Pagamento já confirmado', 'Conclua a triagem para seguir ao atendimento.');
     }
@@ -796,9 +866,12 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
   if (etapaConsulta === 'pagamento') {
     return (
+      <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]}>
         <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
           <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
+          <ConsultaProgress current="pagamento" />
           <PagamentoConsulta
             pacienteLogado={paciente}
             atendimentoParaTerceiro={para === 'outra-pessoa'}
@@ -809,17 +882,22 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
             onPagamentoConfirmado={iniciarTriagemAposPagamento}
           />
         </ScrollView>
+        </Animated.View>
       </SafeAreaView>
+      </Animated.View>
     );
   }
 
   if (etapaConsulta === 'triagem') {
     const respostasPaciente = triageMessages.filter((m) => m.role === 'user').slice(1);
     return (
+      <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.pageWrapFlex}>
             <PageHeader title="Triagem" onVoltar={voltarEtapa} />
+            <ConsultaProgress current="triagem" />
             <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ PAGAMENTO CONFIRMADO</Text></View>
             <View style={styles.triageProgressRow}>
               <View style={styles.liveDot} />
@@ -865,15 +943,20 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
             </View>
           </View>
         </KeyboardAvoidingView>
+        </Animated.View>
       </SafeAreaView>
+      </Animated.View>
     );
   }
 
   if (etapaConsulta === 'fila') {
     return (
+      <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]}>
         <ScrollView contentContainerStyle={styles.pageWrap}>
-          <PageHeader title="Atendimento" onVoltar={onVoltar} />
+          <PageHeader title="Atendimento" onVoltar={motion.close} />
+          <ConsultaProgress current="fila" />
           <View style={styles.queueHero}>
             <View style={styles.queueCheck}><Text style={styles.queueCheckText}>✓</Text></View>
             <Text style={styles.queueTitle}>Triagem concluída</Text>
@@ -886,14 +969,19 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
           </View>
           <PrimaryButton label="Voltar ao início" loading={false} onPress={onVoltar} />
         </ScrollView>
+        </Animated.View>
       </SafeAreaView>
+      </Animated.View>
     );
   }
 
   return (
+    <Animated.View style={motion.style}>
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
         <PageHeader title="Nova consulta" onVoltar={voltarEtapa} />
+        <ConsultaProgress current="dados" />
+        <Animated.View style={stageStyle}>
         <Text style={styles.pageLead}>Vamos começar identificando quem será atendido.</Text>
 
         <View style={styles.choiceRow}>
@@ -939,8 +1027,22 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         </View>
 
         <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta} onPress={irParaPagamento} />
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+function ConsultaProgress({ current }: { current: EtapaConsulta }) {
+  const etapas: EtapaConsulta[] = ['dados', 'pagamento', 'triagem', 'fila'];
+  const atual = etapas.indexOf(current);
+  return (
+    <View style={styles.consultaProgress}>
+      {etapas.map((item, index) => (
+        <View key={item} style={[styles.consultaDot, index === atual && styles.consultaDotActive, index < atual && styles.consultaDotDone]} />
+      ))}
+    </View>
   );
 }
 
@@ -965,7 +1067,7 @@ function Badge({ text }: { text: string }) {
 }
 
 function PrimaryButton({ label, loading, onPress }: { label: string; loading: boolean; onPress: () => void }) {
-  return <Pressable onPress={onPress} disabled={loading} style={[styles.primaryButton, loading && styles.buttonLoading]}>{loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>{label}</Text>}</Pressable>;
+  return <Pressable onPress={onPress} disabled={loading} style={({ pressed }) => [styles.primaryButton, loading && styles.buttonLoading, pressed && !loading && styles.primaryPressed]}>{loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>{label}</Text>}</Pressable>;
 }
 
 function QuickCard({ title, subtitle, onPress, featured }: { title: string; subtitle: string; onPress: () => void; featured?: boolean }) {
@@ -1070,8 +1172,9 @@ const styles = StyleSheet.create({
   phoneInput: { flex: 1, height: 54 },
   codeInput: { textAlign: 'center', fontSize: 28, fontWeight: '800', letterSpacing: 10, paddingLeft: 24 },
   primaryButton: { minHeight: 54, backgroundColor: '#16c783', borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  primaryPressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
   buttonLoading: { opacity: .75 },
-  primaryButtonText: { color: '#07100f', fontSize: 16, fontWeight: '800' },
+  primaryButtonText: { color: '#07100f', fontSize: 15.5, fontWeight: '700' },
   privacyText: { color: themeColor('#66736e', '#84908c'), fontSize: 11.5, lineHeight: 17, marginTop: 14 },
   helperText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 16, paddingHorizontal: 16 },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20 },
@@ -1083,16 +1186,21 @@ const styles = StyleSheet.create({
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   kicker: { color: '#16c783', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  greeting: { color: themeColor('#14201d', '#fff'), fontSize: 30, fontWeight: '700', marginTop: 3, letterSpacing: -.6 },
+  greeting: { color: themeColor('#14201d', '#fff'), fontSize: 29, fontWeight: '600', marginTop: 3, letterSpacing: -.5 },
   homeSubtitle: { color: themeColor('#66736e', '#8a97a6'), fontSize: 14, marginTop: 4 },
-  avatarButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#c6ddd2', '#275044'), alignItems: 'center', justifyContent: 'center' },
+  avatarButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: themeColor('#dce9e2', '#10201d'), alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 17, fontWeight: '800' },
   heroCard: { backgroundColor: themeColor('#dfe9e3', '#10201d'), borderRadius: 24, padding: 22, marginBottom: 14 },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#78f25f' },
   heroEyebrow: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '800', letterSpacing: 1.1 },
-  heroTitle: { color: themeColor('#14201d', '#fff'), fontSize: 25, fontWeight: '700', lineHeight: 31, marginTop: 10, letterSpacing: -.35 },
-  heroText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 21, marginTop: 9, marginBottom: 14 },
+  heroTitle: { color: themeColor('#14201d', '#fff'), fontSize: 24, fontWeight: '600', lineHeight: 30, marginTop: 10, letterSpacing: -.3 },
+  heroText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 20, marginTop: 8, marginBottom: 15, fontSize: 13.5 },
+  activeCareCard: { backgroundColor: themeColor('#d7e8df', '#10251f'), borderRadius: 20, padding: 18, marginBottom: 12 },
+  activeCareEyebrow: { color: themeColor('#18724f', '#78f25f'), fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  activeCareTitle: { color: themeColor('#14201d', '#f3f8f5'), fontSize: 19, fontWeight: '600', marginTop: 9 },
+  activeCareText: { color: themeColor('#596763', '#9fb0a9'), fontSize: 13, lineHeight: 19, marginTop: 5 },
+  activeCareAction: { color: '#16c783', fontSize: 12.5, fontWeight: '600', marginTop: 11 },
   quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#f0f5f2', '#0c1816'), padding: 15 },
   quickCardFeatured: { borderColor: '#346342', backgroundColor: '#101d14' },
@@ -1101,7 +1209,7 @@ const styles = StyleSheet.create({
   quickSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   quickArrow: { color: '#16c783', fontSize: 20, marginTop: 'auto' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 },
-  sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 19, fontWeight: '700' },
+  sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18.5, fontWeight: '600' },
   sectionAction: { color: '#16c783', fontSize: 13, fontWeight: '700' },
   lastCard: { backgroundColor: themeColor('#edf3ef', '#0d1916'), borderRadius: 20, padding: 18, marginBottom: 27 },
   lastTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -1111,6 +1219,8 @@ const styles = StyleSheet.create({
   lastDoctor: { color: themeColor('#14201d', '#eef5f1'), fontSize: 17, fontWeight: '700', marginTop: 14 },
   lastSummary: { color: themeColor('#596763', '#94a39d'), lineHeight: 20, marginTop: 6 },
   historyCard: { marginBottom: 9 },
+  historyCarousel: { gap: 10, paddingBottom: 9, paddingRight: 12 },
+  historyCardHorizontal: { width: 276, marginBottom: 0 },
   historyLine: { flexDirection: 'row', backgroundColor: themeColor('#eef4f0', '#0c1816'), borderRadius: 17, padding: 15 },
   timelineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#16c783', marginTop: 5, marginRight: 12 },
   historyBody: { flex: 1 },
@@ -1160,17 +1270,21 @@ const styles = StyleSheet.create({
 
   pageWrap: { padding: 20, paddingBottom: 50 },
   pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
+  consultaProgress: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, marginTop: -12, marginBottom: 20 },
+  consultaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themeColor('#bdcbc4', '#24332e') },
+  consultaDotDone: { backgroundColor: themeColor('#79b99c', '#356957') },
+  consultaDotActive: { width: 20, backgroundColor: '#16c783' },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-  backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: themeColor('#dce7e1', '#0b1715'), alignItems: 'center', justifyContent: 'center' },
   backText: { color: themeColor('#14201d', '#fff'), fontSize: 30, lineHeight: 32, marginTop: -3 },
   pageTitle: { color: themeColor('#14201d', '#fff'), fontSize: 20, fontWeight: '800' },
   pageLead: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 21, marginTop: -7, marginBottom: 18 },
   profileHero: { alignItems: 'center', marginBottom: 22 },
-  profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#c6ddd2', '#275044'), alignItems: 'center', justifyContent: 'center' },
+  profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: themeColor('#dce9e2', '#10201d'), alignItems: 'center', justifyContent: 'center' },
   profileAvatarText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 27, fontWeight: '800' },
   profileName: { color: themeColor('#14201d', '#fff'), fontSize: 22, fontWeight: '800', marginTop: 13, textAlign: 'center' },
   profileHint: { color: themeColor('#66736e', '#8a97a6'), fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 5, maxWidth: 290 },
-  profileCard: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, paddingHorizontal: 17 },
+  profileCard: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, paddingHorizontal: 17 },
   infoRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f') },
   infoLabel: { color: themeColor('#66736e', '#71807b'), fontSize: 11, fontWeight: '800', letterSpacing: .6, textTransform: 'uppercase' },
   infoValue: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '700', marginTop: 5 },
@@ -1181,8 +1295,8 @@ const styles = StyleSheet.create({
   logoutButtonText: { color: '#ff9ca5', fontSize: 14, fontWeight: '800' },
 
   choiceRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  choiceCard: { flex: 1, minHeight: 120, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), padding: 15 },
-  choiceCardActive: { borderColor: '#16c783', backgroundColor: themeColor('#eef7f1', '#0f211c') },
+  choiceCard: { flex: 1, minHeight: 120, borderRadius: 18, backgroundColor: themeColor('#e9f0ec', '#0b1715'), padding: 15 },
+  choiceCardActive: { backgroundColor: themeColor('#dcebe3', '#0f211c') },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#50605a', alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
   radioActive: { borderColor: '#16c783' },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16c783' },
@@ -1192,13 +1306,13 @@ const styles = StyleSheet.create({
   identityKicker: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   identityName: { color: '#14201d', fontSize: 18, fontWeight: '800', marginTop: 8 },
   identityMeta: { color: '#66736e', fontSize: 12.5, marginTop: 4 },
-  formCard: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginBottom: 22 },
+  formCard: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, padding: 16, marginBottom: 22 },
   inputLabelDark: { color: '#d6dfdb', fontSize: 12.5, fontWeight: '700', marginBottom: 7 },
-  darkInput: { backgroundColor: themeColor('#ffffff', '#101d1a'), borderWidth: 1, borderColor: themeColor('#d8e3dd', '#223a34'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
+  darkInput: { backgroundColor: themeColor('#dfe8e3', '#101d1a'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
   formSectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18, fontWeight: '800', marginBottom: 10 },
   textArea: { minHeight: 128, paddingTop: 14 },
   counter: { color: '#64736e', fontSize: 11, textAlign: 'right', marginTop: -7, marginBottom: 20 },
-  flowPreview: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginBottom: 17 },
+  flowPreview: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, padding: 16, marginBottom: 17 },
   flowPreviewTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800', marginBottom: 5 },
   flowRow: { flexDirection: 'row', gap: 12, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f'), paddingVertical: 13 },
   flowNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: themeColor('#e7f7ee', '#123027'), alignItems: 'center', justifyContent: 'center' },
@@ -1206,7 +1320,7 @@ const styles = StyleSheet.create({
   flowTitle: { color: themeColor('#14201d', '#fff'), fontSize: 13.5, fontWeight: '800' },
   flowText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12, lineHeight: 17, marginTop: 3 },
 
-  paidBadge: { alignSelf: 'flex-start', backgroundColor: themeColor('#e7f7ee', '#123027'), borderWidth: 1, borderColor: themeColor('#b9d9ca', '#285746'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginTop: -8, marginBottom: 12 },
+  paidBadge: { alignSelf: 'flex-start', backgroundColor: themeColor('#dcebe3', '#123027'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginTop: -8, marginBottom: 12 },
   paidBadgeText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .7 },
   triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   triageProgressText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
