@@ -38,6 +38,7 @@ import {
 import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
 import ThemeToggle from './src/components/ThemeToggle';
+import DocumentViewer from './src/components/DocumentViewer';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
@@ -557,6 +558,8 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
   onVoltar: () => void;
   onAbrirConsulta: (atendimentoId: number) => void;
 }) {
+  const [docAberto, setDocAberto] = useState<DocumentoPaciente | null>(null);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageWrap}>
@@ -564,7 +567,7 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
         <Text style={styles.pageLead}>Documentos recebidos nas suas consultas ficam disponíveis aqui e também dentro da conversa original.</Text>
         {documentos.length ? documentos.map((doc) => (
           <View key={String(doc.id)} style={styles.documentItem}>
-            <Pressable onPress={() => abrirLink(doc.arquivo_url)} style={styles.documentMain}>
+            <Pressable onPress={() => setDocAberto(doc)} style={styles.documentMain}>
               <View style={styles.documentPdf}><Text style={styles.documentPdfText}>PDF</Text></View>
               <View style={styles.documentInfo}>
                 <Text style={styles.documentName} numberOfLines={2}>{doc.arquivo_nome || 'Documento médico.pdf'}</Text>
@@ -580,6 +583,13 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
           <EmptyCard title="Nenhum documento ainda" text="Quando um profissional enviar um PDF pelo atendimento, ele aparecerá automaticamente aqui." />
         )}
       </ScrollView>
+      <DocumentViewer
+        visible={!!docAberto}
+        url={docAberto?.arquivo_url}
+        name={docAberto?.arquivo_nome}
+        type="pdf"
+        onClose={() => setDocAberto(null)}
+      />
     </SafeAreaView>
   );
 }
