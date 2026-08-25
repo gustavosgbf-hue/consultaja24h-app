@@ -4,21 +4,38 @@
     "slug": "consultaja24h",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.consultaja24h.app",
-      "buildNumber": "1",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.consultaja24h.app",
-      "versionCode": 1
+      "versionCode": 4
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o ConsultaJá24h acesse suas fotos para enviar imagens durante o atendimento.",
+          "cameraPermission": "Permita que o ConsultaJá24h use a câmera para tirar fotos durante o atendimento.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Permita que o ConsultaJá24h use o microfone para enviar mensagens de áudio.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-document-picker"
     ],
     "extra": {
       "eas": {
