@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
   title: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '800' },
   webview: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
-  loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
   imageWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef2f0', '#040807') },
   image: { width: '100%', height: '100%' },
 });
