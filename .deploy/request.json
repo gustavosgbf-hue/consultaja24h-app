@@ -1,5 +1,5 @@
 {
   "action": "ota",
-  "message": "Hide duplicate renewal site header inside app WebView",
-  "requested_at": "2026-08-25T05:08:00-03:00"
+  "message": "Robustly hide renewal site header inside app WebView",
+  "requested_at": "2026-08-25T05:13:00-03:00"
 }
