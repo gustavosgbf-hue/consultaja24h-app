@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   DynamicColorIOS,
   Platform,
   Pressable,
@@ -22,6 +23,37 @@ import AtendimentoAtual from './components/AtendimentoAtual';
 import AtendimentoEmAndamentoCard from './components/AtendimentoEmAndamentoCard';
 import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/push';
 import { emitPushNavigation } from './navigation/pushNavigation';
+
+function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
+  atendimento: AtendimentoEmAndamento;
+  onVoltar: () => void;
+  onAtualizado: (atual: AtendimentoEmAndamento | null) => void;
+}) {
+  const x = useRef(new Animated.Value(28)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(x, { toValue: 0, duration: 230, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 190, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, x]);
+
+  function fechar() {
+    Animated.parallel([
+      Animated.timing(x, { toValue: 34, duration: 170, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 145, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) onVoltar();
+    });
+  }
+
+  return (
+    <Animated.View style={{ flex: 1, opacity, transform: [{ translateX: x }] }}>
+      <AtendimentoAtual atendimentoInicial={atendimento} onVoltar={fechar} onAtualizado={onAtualizado} />
+    </Animated.View>
+  );
+}
 
 export default function AppRoot() {
   const [checking, setChecking] = useState(true);
@@ -147,8 +179,8 @@ export default function AppRoot() {
 
   if (modoAtendimento && atendimento && !betaEmTriagem) {
     return (
-      <AtendimentoAtual
-        atendimentoInicial={atendimento}
+      <AtendimentoAtualAnimado
+        atendimento={atendimento}
         onVoltar={() => {
           if (atendimento.etapa === 'chat') chatFechadoManualRef.current = true;
           setModoAtendimento(false);

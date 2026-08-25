@@ -34,6 +34,7 @@ import {
   type UploadChatPaciente,
 } from '../api/chatV2';
 import ThemeToggle from './ThemeToggle';
+import { carregarAvaliacaoAtendimento, salvarAvaliacaoAtendimento } from '../api/avaliacao';
 
 function themeColor(light: string, dark: string) {
   return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
@@ -44,6 +45,7 @@ type Props = {
   medicoNome?: string | null;
   onVoltar: () => void;
   somenteLeitura?: boolean;
+  avaliavel?: boolean;
 };
 
 type SwipeProps = {
@@ -235,7 +237,99 @@ function resumoMensagem(mensagem?: MensagemChatV2 | null) {
   return mensagem.arquivo_tipo === 'audio' ? 'Mensagem de áudio' : 'Documento';
 }
 
-export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, somenteLeitura = false }: Props) {
+function RatingStar({ active, onPress }: { active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.ratingStarButton} accessibilityRole="button" accessibilityLabel={active ? 'Estrela selecionada' : 'Selecionar estrela'}>
+      <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="m12 3.2 2.55 5.18 5.72.83-4.14 4.03.98 5.69L12 16.24l-5.11 2.69.98-5.69-4.14-4.03 5.72-.83L12 3.2Z"
+          fill={active ? '#78f25f' : 'transparent'}
+          stroke={active ? '#78f25f' : themeColor('#8da098', '#5f716a')}
+          strokeWidth="1.45"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </Pressable>
+  );
+}
+
+function AvaliacaoConsulta({ atendimentoId, medicoNome }: { atendimentoId: number; medicoNome?: string | null }) {
+  const [carregando, setCarregando] = useState(true);
+  const [permitida, setPermitida] = useState(false);
+  const [estrelas, setEstrelas] = useState(0);
+  const [comentario, setComentario] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [salva, setSalva] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+    carregarAvaliacaoAtendimento(atendimentoId)
+      .then((data) => {
+        if (!ativo) return;
+        setPermitida(!!data.avaliavel);
+        if (data.avaliacao) setSalva(true);
+      })
+      .catch(() => {})
+      .finally(() => { if (ativo) setCarregando(false); });
+    return () => { ativo = false; };
+  }, [atendimentoId]);
+
+  async function salvar() {
+    if (estrelas < 1 || salvando) return;
+    setSalvando(true);
+    try {
+      await salvarAvaliacaoAtendimento(atendimentoId, estrelas, comentario);
+      setSalva(true);
+      setEstrelas(0);
+      setComentario('');
+    } catch (error) {
+      Alert.alert('Não foi possível salvar', error instanceof Error ? error.message : 'Tente novamente em instantes.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (carregando || !permitida) return null;
+
+  if (salva) {
+    return (
+      <View style={styles.ratingThanks}>
+        <Text style={styles.ratingThanksTitle}>Obrigado pelo seu feedback</Text>
+        <Text style={styles.ratingThanksText}>Sua avaliação foi registrada de forma privada pela ConsultaJá24h.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.ratingCard}>
+      <Text style={styles.ratingEyebrow}>AVALIAÇÃO DO ATENDIMENTO</Text>
+      <Text style={styles.ratingTitle}>Como foi seu atendimento{medicoNome ? ' com ' + medicoNome : ''}?</Text>
+      <Text style={styles.ratingText}>Sua avaliação é privada e ajuda a ConsultaJá24h a acompanhar a qualidade dos atendimentos.</Text>
+      <View style={styles.ratingStars}>
+        {[1, 2, 3, 4, 5].map((n) => <RatingStar key={n} active={n <= estrelas} onPress={() => setEstrelas(n)} />)}
+      </View>
+      {estrelas > 0 ? (
+        <>
+          <TextInput
+            value={comentario}
+            onChangeText={(value) => setComentario(value.slice(0, 600))}
+            placeholder="Quer deixar um comentário? (opcional)"
+            placeholderTextColor={themeColor('#84918c', '#697b74')}
+            style={styles.ratingInput}
+            multiline
+            maxLength={600}
+            textAlignVertical="top"
+          />
+          <Pressable onPress={salvar} disabled={salvando} style={[styles.ratingSave, salvando && { opacity: 0.6 }]}>
+            {salvando ? <ActivityIndicator size="small" color="#07100f" /> : <Text style={styles.ratingSaveText}>Enviar avaliação</Text>}
+          </Pressable>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, somenteLeitura = false, avaliavel = false }: Props) {
   const [mensagens, setMensagens] = useState<MensagemChatV2[]>([]);
   const [texto, setTexto] = useState('');
   const [loading, setLoading] = useState(true);
@@ -444,6 +538,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
             <View style={styles.notice}>
               <Text style={styles.noticeText}>{somenteLeitura ? 'Esta conversa foi encerrada e permanece disponível para consulta e acesso aos documentos.' : 'Você está falando diretamente com o profissional responsável pelo seu atendimento.'}</Text>
             </View>
+            {avaliavel ? <AvaliacaoConsulta atendimentoId={atendimentoId} medicoNome={medicoNome} /> : null}
             {mensagens.length === 0 ? (
               <View style={styles.empty}><Text style={styles.emptyTitle}>Conversa iniciada</Text><Text style={styles.emptyText}>Envie uma mensagem quando quiser complementar alguma informação.</Text></View>
             ) : mensagens.map((m) => {
@@ -585,6 +680,18 @@ const styles = StyleSheet.create({
   messagesContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 20 },
   notice: { alignSelf: 'center', maxWidth: 310, backgroundColor: themeColor('#e3ebe6', '#0d1916'), borderRadius: 13, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 16 },
   noticeText: { textAlign: 'center', color: themeColor('#66736e', '#899892'), fontSize: 11, lineHeight: 16 },
+  ratingCard: { marginBottom: 16, borderRadius: 18, padding: 16, backgroundColor: themeColor('#f7fbf8', '#0d1916'), borderWidth: 1, borderColor: themeColor('#dce8e1', '#183029') },
+  ratingEyebrow: { color: themeColor('#18724f', '#78f25f'), fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  ratingTitle: { marginTop: 7, color: themeColor('#14201d', '#f1f7f4'), fontSize: 15, fontWeight: '800', lineHeight: 20 },
+  ratingText: { marginTop: 5, color: themeColor('#66736e', '#87968f'), fontSize: 11.5, lineHeight: 17 },
+  ratingStars: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12, marginBottom: 4 },
+  ratingStarButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  ratingInput: { minHeight: 72, marginTop: 10, borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10, color: themeColor('#14201d', '#e9f1ed'), backgroundColor: themeColor('#edf4f0', '#09120f'), borderWidth: 1, borderColor: themeColor('#d5e2db', '#1b3029'), fontSize: 12.5, lineHeight: 18 },
+  ratingSave: { marginTop: 10, minHeight: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#78f25f' },
+  ratingSaveText: { color: '#07100f', fontSize: 12.5, fontWeight: '800' },
+  ratingThanks: { marginBottom: 16, borderRadius: 16, padding: 14, backgroundColor: themeColor('#eef7f1', '#0d1916'), borderWidth: 1, borderColor: themeColor('#dce8e1', '#183029') },
+  ratingThanksTitle: { color: themeColor('#14201d', '#f1f7f4'), fontSize: 13.5, fontWeight: '800' },
+  ratingThanksText: { marginTop: 4, color: themeColor('#66736e', '#87968f'), fontSize: 11.5, lineHeight: 17 },
   empty: { marginTop: 42, alignItems: 'center', paddingHorizontal: 28 },
   emptyTitle: { color: themeColor('#26332f', '#dbe6e1'), fontSize: 16, fontWeight: '700' },
   emptyText: { color: themeColor('#66736e', '#75837e'), fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },

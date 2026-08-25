@@ -69,6 +69,12 @@ Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunt
 type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
 type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
+const finalNavigationPolishApplied = true;
+
+function atendimentoConcluido(status?: string | null) {
+  const valor = String(status || '').trim().toLowerCase();
+  return ['encerrado', 'finalizado', 'finalizada', 'concluido', 'concluído', 'arquivado'].includes(valor);
+}
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -206,6 +212,7 @@ export default function App() {
   const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
   const [webPage, setWebPage] = useState<{ title: string; url: string } | null>(null);
+  const homeScrollOffsetRef = useRef(0);
 
   useEffect(() => {
     restaurarSessao();
@@ -477,10 +484,8 @@ export default function App() {
 
   if (tela === 'historico-chat' && historicoSelecionado) {
     return (
-      <ChatPaciente
-        atendimentoId={historicoSelecionado.id}
-        medicoNome={historicoSelecionado.medico_nome || historicoSelecionado.profissional_nome}
-        somenteLeitura={String(historicoSelecionado.status || '').trim().toLowerCase() !== 'assumido'}
+      <HistoricoChatPage
+        item={historicoSelecionado}
         onVoltar={() => { setTela(historicoOrigem === 'documentos' ? 'documentos' : 'home'); setHistoricoSelecionado(null); }}
       />
     );
@@ -494,6 +499,8 @@ export default function App() {
       documentos={documentos}
       renovacoes={renovacoes}
       loading={homeLoading}
+      initialScrollOffset={homeScrollOffsetRef.current}
+      onScrollOffset={(y) => { homeScrollOffsetRef.current = y; }}
       mostrarTudo={mostrarHistoricoCompleto}
       onMostrarTudo={() => setMostrarHistoricoCompleto((valor) => !valor)}
       onAtualizar={carregarHome}
@@ -509,13 +516,15 @@ export default function App() {
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoes, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
+function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoes, loading, initialScrollOffset, onScrollOffset, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
   documentos: DocumentoPaciente[];
   renovacoes: RenovacaoPaciente[];
   loading: boolean;
+  initialScrollOffset: number;
+  onScrollOffset: (y: number) => void;
   mostrarTudo: boolean;
   onMostrarTudo: () => void;
   onAtualizar: () => void;
@@ -531,8 +540,9 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
   const historicoConsultas = historico.filter((item) => !String(item.tipo || '').toLowerCase().startsWith('renovacao_'));
   const atendimentoAtivo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
-  const ultimo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() !== 'assumido');
-  const itensHistorico = mostrarTudo ? historicoConsultas : historicoConsultas.slice(0, 4);
+  const historicoFinalizados = historicoConsultas.filter((item) => atendimentoConcluido(item.status));
+  const ultimo = historicoFinalizados[0] || null;
+  const itensHistorico = mostrarTudo ? historicoFinalizados : historicoFinalizados.slice(0, 4);
   const renovacaoAtual = renovacoes.find((item) => String(item.pagamento_status || '').toLowerCase() === 'confirmado') || null;
   const proximos = useMemo(
     () => agendamentos.filter((item) => new Date(item.horario_agendado).getTime() >= Date.now()).slice(0, 2),
@@ -544,6 +554,9 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
       <ScrollView
         contentContainerStyle={styles.home}
         showsVerticalScrollIndicator={false}
+        contentOffset={{ x: 0, y: initialScrollOffset }}
+        onScroll={(event) => onScrollOffset(event.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onAtualizar} tintColor="#16c783" colors={["#16c783"]} />}
       >
         <View style={styles.topbar}>
@@ -619,8 +632,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
           </>
         )}
 
-        <SectionHeader title="Meus atendimentos" action={historicoConsultas.length > 4 ? (mostrarTudo ? 'Ver menos' : 'Ver todos') : undefined} onAction={onMostrarTudo} />
-        {loading && historicoConsultas.length === 0 ? (
+        <SectionHeader title="Meus atendimentos" action={historicoFinalizados.length > 4 ? (mostrarTudo ? 'Ver menos' : 'Ver todos') : undefined} onAction={onMostrarTudo} />
+        {loading && historicoFinalizados.length === 0 ? (
           <HomeHistorySkeleton />
         ) : itensHistorico.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.historyCarousel} snapToInterval={286} decelerationRate="fast">
@@ -665,6 +678,21 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
 
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function HistoricoChatPage({ item, onVoltar }: { item: AtendimentoHistorico; onVoltar: () => void }) {
+  const motion = usePageSlide(onVoltar);
+  return (
+    <Animated.View style={motion.style}>
+      <ChatPaciente
+        atendimentoId={item.id}
+        medicoNome={item.medico_nome || item.profissional_nome}
+        somenteLeitura={String(item.status || '').trim().toLowerCase() !== 'assumido'}
+        avaliavel={atendimentoConcluido(item.status)}
+        onVoltar={motion.close}
+      />
+    </Animated.View>
   );
 }
 
