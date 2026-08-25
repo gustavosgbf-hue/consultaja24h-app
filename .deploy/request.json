@@ -1,5 +1,5 @@
 {
   "action": "finalize_release",
-  "message": "Add discreet support entry with WhatsApp Business contact",
-  "requested_at": "2026-08-25T04:50:00-03:00"
+  "message": "Prevent simultaneous consultations and preserve closed chat read-only",
+  "requested_at": "2026-08-25T04:55:00-03:00"
 }
