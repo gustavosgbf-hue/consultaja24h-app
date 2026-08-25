@@ -28,6 +28,7 @@ import {
   carregarHistoricoPaciente,
   carregarDocumentosPaciente,
   carregarPaciente,
+  completarPerfilPaciente,
   carregarRenovacoesPaciente,
   carregarRenovacaoPaciente,
   conversarTriagem,
@@ -86,6 +87,21 @@ function formatarTelefone(valor: string) {
   if (numeros.length <= 7) return `(${numeros.slice(0, 2)}) ${numeros.slice(2)}`;
   if (numeros.length <= 10) return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 6)}-${numeros.slice(6)}`;
   return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7)}`;
+}
+
+function formatarNascimentoInput(valor: string) {
+  const n = digits(valor).slice(0, 8);
+  if (n.length <= 2) return n;
+  if (n.length <= 4) return n.slice(0, 2) + '/' + n.slice(2);
+  return n.slice(0, 2) + '/' + n.slice(2, 4) + '/' + n.slice(4);
+}
+
+function nascimentoValido(valor: string) {
+  const m = String(valor || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return false;
+  const dia = Number(m[1]), mes = Number(m[2]), ano = Number(m[3]);
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  return d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia && d.getTime() <= Date.now();
 }
 
 function formatarCpf(valor: string) {
@@ -475,7 +491,7 @@ export default function App() {
   }
 
   if (tela === 'nova-consulta') {
-    return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} />;
+    return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} onPerfilAtualizado={setPaciente} />;
   }
 
   if (tela === 'documentos') {
@@ -860,12 +876,22 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
   );
 }
 
-function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: () => void }) {
+function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Paciente; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {
   const [para, setPara] = useState<AtendimentoPara>('mim');
   const [etapaConsulta, setEtapaConsulta] = useState<EtapaConsulta>('dados');
   const [nomeOutro, setNomeOutro] = useState('');
   const [cpfOutro, setCpfOutro] = useState('');
   const [nascimentoOutro, setNascimentoOutro] = useState('');
+  const [nomeProprio, setNomeProprio] = useState(() => {
+    const atual = String(paciente.nome || '').trim();
+    return /^(paciente|paciente whatsapp|-)$/i.test(atual) ? '' : atual;
+  });
+  const [nascimentoProprio, setNascimentoProprio] = useState(() => {
+    const atual = String(paciente.data_nascimento || '').trim();
+    const iso = atual.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return iso ? iso[3] + '/' + iso[2] + '/' + iso[1] : atual;
+  });
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [queixa, setQueixa] = useState('');
   const [triageMessages, setTriageMessages] = useState<TriageMessage[]>([]);
   const [perguntaAtual, setPerguntaAtual] = useState('');
@@ -904,9 +930,11 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     },
   }), [etapaConsulta]);
 
-  const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
+  const nomeCadastro = String(paciente.nome || '').trim();
+  const perfilIncompleto = !nomeCadastro || /^(paciente|paciente whatsapp|-)$/i.test(nomeCadastro) || !String(paciente.data_nascimento || '').trim();
+  const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : (perfilIncompleto ? nomeProprio.trim() : paciente.nome);
   const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
-  const pacienteNascimentoSelecionado = para === 'outra-pessoa' ? nascimentoOutro.trim() : undefined;
+  const pacienteNascimentoSelecionado = para === 'outra-pessoa' ? nascimentoOutro.trim() : (perfilIncompleto ? nascimentoProprio.trim() : (paciente.data_nascimento || undefined));
   const telefoneContato = digits(paciente.tel);
 
   function validarDados() {
@@ -923,9 +951,19 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
         Alert.alert('Confira a data', 'Informe a data de nascimento do paciente.');
         return false;
       }
-    } else if (digits(paciente.cpf).length !== 11) {
-      Alert.alert('CPF não encontrado', 'Seu cadastro precisa ter um CPF válido antes de iniciar a consulta.');
-      return false;
+    } else {
+      if (digits(paciente.cpf).length !== 11) {
+        Alert.alert('CPF não encontrado', 'Seu cadastro precisa ter um CPF válido antes de iniciar a consulta.');
+        return false;
+      }
+      if (perfilIncompleto && nomeProprio.trim().split(/\s+/).filter(Boolean).length < 2) {
+        Alert.alert('Confira o nome', 'Informe seu nome completo.');
+        return false;
+      }
+      if (perfilIncompleto && !nascimentoValido(nascimentoProprio)) {
+        Alert.alert('Confira a data', 'Informe sua data de nascimento no formato DD/MM/AAAA.');
+        return false;
+      }
     }
     if (queixa.trim().length < 5) {
       Alert.alert('Conte um pouco mais', 'Descreva brevemente o que está acontecendo.');
@@ -935,7 +973,21 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   }
 
   async function irParaPagamento() {
-    if (!validarDados() || iniciandoBeta) return;
+    if (!validarDados() || iniciandoBeta || salvandoPerfil) return;
+
+    if (para === 'mim' && perfilIncompleto) {
+      setSalvandoPerfil(true);
+      try {
+        const salvo = await completarPerfilPaciente(nomeProprio.trim(), nascimentoProprio.trim());
+        if (!salvo?.paciente) throw new Error('Não foi possível atualizar o cadastro.');
+        onPerfilAtualizado(salvo.paciente);
+      } catch (error) {
+        Alert.alert('Não foi possível salvar seus dados', error instanceof Error ? error.message : 'Tente novamente em instantes.');
+        return;
+      } finally {
+        setSalvandoPerfil(false);
+      }
+    }
 
     const beta = digits(paciente.tel).slice(-11) === BETA_TEST_PHONE;
     if (!beta) {
@@ -1195,11 +1247,21 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
               </View>
 
               {para === 'mim' ? (
-                <View style={styles.identityCard}>
-                  <Text style={styles.identityKicker}>PACIENTE</Text>
-                  <Text style={styles.identityName}>{paciente.nome}</Text>
-                  <Text style={styles.identityMeta}>{mascararCpf(paciente.cpf)} · {mascararTelefone(paciente.tel)}</Text>
-                </View>
+                perfilIncompleto ? (
+                  <View style={styles.formCard}>
+                    <Text style={styles.inputLabelDark}>Nome completo</Text>
+                    <TextInput value={nomeProprio} onChangeText={setNomeProprio} placeholder="Nome e sobrenome" placeholderTextColor="#66736e" style={styles.darkInput} autoCapitalize="words" />
+                    <Text style={styles.inputLabelDark}>Data de nascimento</Text>
+                    <TextInput value={nascimentoProprio} onChangeText={(v) => setNascimentoProprio(formatarNascimentoInput(v))} placeholder="DD/MM/AAAA" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="number-pad" maxLength={10} />
+                    <Text style={styles.identityMeta}>CPF {mascararCpf(paciente.cpf)}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.identityCard}>
+                    <Text style={styles.identityKicker}>PACIENTE</Text>
+                    <Text style={styles.identityName}>{paciente.nome}</Text>
+                    <Text style={styles.identityMeta}>{mascararCpf(paciente.cpf)} · {mascararTelefone(paciente.tel)}</Text>
+                  </View>
+                )
               ) : (
                 <View style={styles.formCard}>
                   <Text style={styles.inputLabelDark}>Nome completo do paciente</Text>
@@ -1207,7 +1269,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
                   <Text style={styles.inputLabelDark}>CPF</Text>
                   <TextInput value={cpfOutro} onChangeText={(v) => setCpfOutro(formatarCpf(v))} placeholder="000.000.000-00" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="number-pad" maxLength={14} />
                   <Text style={styles.inputLabelDark}>Data de nascimento</Text>
-                  <TextInput value={nascimentoOutro} onChangeText={setNascimentoOutro} placeholder="DD/MM/AAAA" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="numbers-and-punctuation" maxLength={10} />
+                  <TextInput value={nascimentoOutro} onChangeText={(v) => setNascimentoOutro(formatarNascimentoInput(v))} placeholder="DD/MM/AAAA" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="number-pad" maxLength={10} />
                 </View>
               )}
 
@@ -1224,18 +1286,10 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
               />
               <Text style={styles.counter}>{queixa.length}/1200</Text>
 
-              <View style={styles.flowPreview}>
-                <Text style={styles.flowPreviewTitle}>Como funciona</Text>
-                <View style={styles.flowCompact}>
-                  <FlowChip number="1" title="Pagamento" />
-                  <FlowChip number="2" title="Triagem" />
-                  <FlowChip number="3" title="Chat" />
-                </View>
-              </View>
             </ScrollView>
 
             <View style={styles.stickyCta}>
-              <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta} onPress={irParaPagamento} />
+              <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta || salvandoPerfil} onPress={irParaPagamento} />
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
