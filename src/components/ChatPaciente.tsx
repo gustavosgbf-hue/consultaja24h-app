@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Alert,
   DynamicColorIOS,
+  Image,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -15,15 +17,31 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import { WebView } from 'react-native-webview';
+import {
+  carregarChatPacienteV2,
+  enviarAnexoChatPacienteV2,
+  enviarMensagemChatPacienteV2,
+  type MensagemChatV2,
+  type UploadChatPaciente,
+} from '../api/chatV2';
+import ThemeToggle from './ThemeToggle';
 
 function themeColor(light: string, dark: string) {
   return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
 }
-import {
-  carregarChatPacienteV2,
-  enviarMensagemChatPacienteV2,
-  type MensagemChatV2,
-} from '../api/chatV2';
 
 type Props = {
   atendimentoId: number;
@@ -39,35 +57,162 @@ type SwipeProps = {
   children: React.ReactNode;
 };
 
+type ViewerState = {
+  url: string;
+  name: string;
+  type: 'pdf' | 'imagem';
+} | null;
+
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+
+function ClipIcon({ color = '#9aaba4' }: { color?: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path d="M8.5 12.7 14.9 6.3a3.1 3.1 0 0 1 4.4 4.4l-8.2 8.2a5 5 0 0 1-7.1-7.1l8-8" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function CameraIcon({ color = '#9aaba4' }: { color?: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path d="M8.2 6.5 9.6 4.5h4.8l1.4 2h2.7a2 2 0 0 1 2 2v8.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2h2.7Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+      <Circle cx="12" cy="12.8" r="3.2" stroke={color} strokeWidth="1.7" />
+    </Svg>
+  );
+}
+
+function PhotoIcon({ color = '#9aaba4' }: { color?: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Rect x="3.5" y="4" width="17" height="16" rx="2.4" stroke={color} strokeWidth="1.7" />
+      <Circle cx="9" cy="9" r="1.6" stroke={color} strokeWidth="1.5" />
+      <Path d="m5.8 17 4.2-4.1 3.1 3 2.2-2.2 2.9 3.3" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function FileIcon({ color = '#9aaba4' }: { color?: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path d="M6 3.8h7.2L18 8.6v11.6H6V3.8Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+      <Path d="M13.2 3.8v4.8H18" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+      <Line x1="8.8" y1="13" x2="15.4" y2="13" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <Line x1="8.8" y1="16" x2="13.2" y2="16" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function MicIcon({ color = '#9aaba4' }: { color?: string }) {
+  return (
+    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
+      <Rect x="8.5" y="3.5" width="7" height="11" rx="3.5" stroke={color} strokeWidth="1.8" />
+      <Path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0M12 17.7v2.8M9.3 20.5h5.4" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function SendIcon({ color = '#07100f' }: { color?: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 12h13M13 7l5 5-5 5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ReplyIcon({ color = '#7eb29e' }: { color?: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path d="m10 7-5 5 5 5M5 12h7.5c3.8 0 6.5 2 6.5 5.5" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function CloseIcon({ color = '#a9b5b0' }: { color?: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path d="m7 7 10 10M17 7 7 17" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function PlayIcon({ playing }: { playing: boolean }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      {playing ? (
+        <>
+          <Rect x="7" y="6" width="3.5" height="12" rx="1" fill="#78f25f" />
+          <Rect x="13.5" y="6" width="3.5" height="12" rx="1" fill="#78f25f" />
+        </>
+      ) : (
+        <Path d="m8 6 10 6-10 6V6Z" fill="#78f25f" />
+      )}
+    </Svg>
+  );
+}
+
+function formatDuration(seconds: number) {
+  const safe = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+  const min = Math.floor(safe / 60);
+  const sec = safe % 60;
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+function AudioMessage({ url }: { url: string }) {
+  const player = useAudioPlayer(url, { updateInterval: 250, downloadFirst: true });
+  const status = useAudioPlayerStatus(player);
+  const progress = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
+
+  function toggle() {
+    if (status.playing) {
+      player.pause();
+      return;
+    }
+    if (status.didJustFinish) player.seekTo(0);
+    player.play();
+  }
+
+  return (
+    <View style={styles.audioCard}>
+      <Pressable onPress={toggle} style={styles.audioPlay} accessibilityLabel={status.playing ? 'Pausar áudio' : 'Reproduzir áudio'}>
+        <PlayIcon playing={status.playing} />
+      </Pressable>
+      <View style={styles.audioBody}>
+        <View style={styles.audioTrack}><View style={[styles.audioProgress, { width: `${progress * 100}%` }]} /></View>
+        <Text style={styles.audioTime}>{formatDuration(status.currentTime)} · {formatDuration(status.duration)}</Text>
+      </View>
+    </View>
+  );
+}
+
 function SwipeMessage({ mensagem, somenteLeitura, onReply, children }: SwipeProps) {
   const x = useRef(new Animated.Value(0)).current;
   const responder = useMemo(
     () => PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gesture) =>
-        !somenteLeitura && Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        !somenteLeitura && gesture.dx > 5 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
       onPanResponderMove: (_event, gesture) => {
-        const deslocamento = Math.max(0, Math.min(72, gesture.dx));
-        x.setValue(deslocamento);
+        x.setValue(Math.max(0, Math.min(58, gesture.dx)));
       },
       onPanResponderRelease: (_event, gesture) => {
-        if (gesture.dx >= 52) onReply(mensagem);
-        Animated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+        if (gesture.dx >= 34) onReply(mensagem);
+        Animated.spring(x, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }).start();
       },
       onPanResponderTerminate: () => {
-        Animated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+        Animated.spring(x, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }).start();
       },
     }),
     [mensagem, onReply, somenteLeitura, x],
   );
 
-  const hintOpacity = x.interpolate({ inputRange: [0, 18, 52], outputRange: [0, 0.35, 1], extrapolate: 'clamp' });
-  const hintScale = x.interpolate({ inputRange: [0, 52], outputRange: [0.72, 1], extrapolate: 'clamp' });
+  const hintOpacity = x.interpolate({ inputRange: [0, 10, 34], outputRange: [0, 0.35, 1], extrapolate: 'clamp' });
+  const hintScale = x.interpolate({ inputRange: [0, 34], outputRange: [0.82, 1], extrapolate: 'clamp' });
 
   return (
     <View style={styles.swipeWrap}>
       {!somenteLeitura ? (
         <Animated.View style={[styles.replyHint, { opacity: hintOpacity, transform: [{ scale: hintScale }] }]} pointerEvents="none">
-          <Text style={styles.replyHintIcon}>↩</Text>
+          <ReplyIcon />
         </Animated.View>
       ) : null}
       <Animated.View style={{ transform: [{ translateX: x }] }} {...responder.panHandlers}>
@@ -91,8 +236,12 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
   const [respondendo, setRespondendo] = useState<MensagemChatV2 | null>(null);
+  const [menuAnexo, setMenuAnexo] = useState(false);
+  const [viewer, setViewer] = useState<ViewerState>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const inputRef = useRef<TextInput | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder, 250);
 
   useEffect(() => {
     let ativo = true;
@@ -133,7 +282,13 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   function selecionarResposta(mensagem: MensagemChatV2) {
     if (somenteLeitura) return;
     setRespondendo(mensagem);
+    setMenuAnexo(false);
     requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function anexarMensagem(mensagem?: MensagemChatV2 | null) {
+    if (!mensagem) return;
+    setMensagens((atuais) => atuais.some((m) => m.id === mensagem.id) ? atuais : [...atuais, mensagem]);
   }
 
   async function enviar() {
@@ -145,9 +300,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     setRespondendo(null);
     try {
       const data = await enviarMensagemChatPacienteV2(atendimentoId, limpo, respostaAtual?.id || null);
-      if (data.mensagem) {
-        setMensagens((atuais) => atuais.some((m) => m.id === data.mensagem.id) ? atuais : [...atuais, data.mensagem]);
-      }
+      anexarMensagem(data.mensagem);
       setErro('');
     } catch (error) {
       setTexto(limpo);
@@ -158,17 +311,109 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     }
   }
 
-  async function abrirArquivo(url?: string | null) {
-    const seguro = String(url || '').trim();
-    if (!/^https:\/\//i.test(seguro)) {
+  async function enviarArquivo(arquivo: UploadChatPaciente, tamanho?: number | null) {
+    if (tamanho && tamanho > MAX_FILE_SIZE) {
+      Alert.alert('Arquivo muito grande', 'O limite por anexo é de 15 MB.');
+      return;
+    }
+    const respostaAtual = respondendo;
+    setEnviando(true);
+    setMenuAnexo(false);
+    try {
+      const data = await enviarAnexoChatPacienteV2(atendimentoId, arquivo, respostaAtual?.id || null);
+      anexarMensagem(data.mensagem);
+      setRespondendo(null);
+      setErro('');
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível enviar o anexo.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function abrirCamera() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Câmera bloqueada', 'Autorize o acesso à câmera nos Ajustes do iPhone para tirar fotos pelo atendimento.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await enviarArquivo({
+      uri: asset.uri,
+      name: asset.fileName || `Foto_${Date.now()}.jpg`,
+      type: asset.mimeType || 'image/jpeg',
+    }, asset.fileSize);
+  }
+
+  async function abrirFotos() {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9, allowsMultipleSelection: false });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await enviarArquivo({
+      uri: asset.uri,
+      name: asset.fileName || `Imagem_${Date.now()}.jpg`,
+      type: asset.mimeType || 'image/jpeg',
+    }, asset.fileSize);
+  }
+
+  async function abrirDocumento() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/*'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await enviarArquivo({
+      uri: asset.uri,
+      name: asset.name || `Documento_${Date.now()}`,
+      type: asset.mimeType || 'application/pdf',
+    }, asset.size);
+  }
+
+  async function iniciarAudio() {
+    setMenuAnexo(false);
+    try {
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Microfone bloqueado', 'Autorize o acesso ao microfone nos Ajustes do iPhone para enviar áudio.');
+        return;
+      }
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setErro('');
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível iniciar a gravação.');
+    }
+  }
+
+  async function finalizarAudio(enviarGravacao: boolean) {
+    try {
+      await recorder.stop();
+      const uri = recorder.uri;
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      if (!enviarGravacao || !uri) return;
+      await enviarArquivo({ uri, name: `Audio_${Date.now()}.m4a`, type: 'audio/mp4' });
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível finalizar o áudio.');
+    }
+  }
+
+  function abrirArquivo(mensagem: MensagemChatV2) {
+    const url = String(mensagem.arquivo_url || '').trim();
+    if (!/^https:\/\//i.test(url)) {
       setErro('Este arquivo não possui um link válido.');
       return;
     }
-    try {
-      await Linking.openURL(seguro);
-      setErro('');
-    } catch {
-      setErro('Não foi possível abrir o arquivo.');
+    if (mensagem.arquivo_tipo === 'pdf') {
+      setViewer({ url, name: mensagem.arquivo_nome || 'Documento.pdf', type: 'pdf' });
+      return;
+    }
+    if (mensagem.arquivo_tipo === 'imagem') {
+      setViewer({ url, name: mensagem.arquivo_nome || 'Imagem', type: 'imagem' });
     }
   }
 
@@ -176,13 +421,13 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
-          <Pressable onPress={onVoltar} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable onPress={onVoltar} style={styles.backButton} accessibilityLabel="Voltar"><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerCenter}>
             <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.status}>{somenteLeitura ? 'HISTÓRICO DA CONSULTA' : 'ATENDIMENTO EM ANDAMENTO'}</Text></View>
             <Text style={styles.doctor} numberOfLines={1} ellipsizeMode="tail">{medicoNome || 'Médico da ConsultaJá24h'}</Text>
             <Text style={styles.id}>Atendimento #{atendimentoId}</Text>
           </View>
-          <View style={{ width: 42 }} />
+          <View style={styles.headerToggle}><ThemeToggle /></View>
         </View>
 
         {loading ? (
@@ -193,6 +438,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
             style={styles.messages}
             contentContainerStyle={styles.messagesContent}
             keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={() => setMenuAnexo(false)}
           >
             <View style={styles.notice}>
               <Text style={styles.noticeText}>{somenteLeitura ? 'Esta conversa foi encerrada e permanece disponível para consulta e acesso aos documentos.' : 'Você está falando diretamente com o profissional responsável pelo seu atendimento.'}</Text>
@@ -201,36 +447,32 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
               <View style={styles.empty}><Text style={styles.emptyTitle}>Conversa iniciada</Text><Text style={styles.emptyText}>Envie uma mensagem quando quiser complementar alguma informação.</Text></View>
             ) : mensagens.map((m) => {
               const respondida = m.reply_to_id ? mensagensPorId.get(m.reply_to_id) : null;
+              const isAudio = m.arquivo_tipo === 'audio' && !!m.arquivo_url;
               return (
                 <SwipeMessage key={String(m.id)} mensagem={m} somenteLeitura={somenteLeitura} onReply={selecionarResposta}>
                   <View style={[styles.messageRow, m.autor === 'paciente' ? styles.mineRow : styles.theirRow]}>
                     <View style={[styles.bubble, m.autor === 'paciente' ? styles.mineBubble : styles.theirBubble]}>
                       {respondida ? (
-                        <Pressable onPress={() => selecionarResposta(respondida)} disabled={somenteLeitura} style={styles.quotedMessage}>
+                        <View style={styles.quotedMessage}>
                           <Text style={styles.quotedAuthor}>{respondida.autor === 'paciente' ? 'Você' : (medicoNome || 'Médico')}</Text>
                           <Text style={styles.quotedText} numberOfLines={2}>{resumoMensagem(respondida)}</Text>
-                        </Pressable>
+                        </View>
                       ) : null}
-                      {m.arquivo_url ? (
-                        <Pressable onPress={() => abrirArquivo(m.arquivo_url)} style={styles.fileCard}>
-                          <View style={styles.fileIcon}><Text style={styles.fileIconText}>{m.arquivo_tipo === 'audio' ? 'ÁUDIO' : 'PDF'}</Text></View>
+                      {isAudio ? <AudioMessage url={String(m.arquivo_url)} /> : null}
+                      {m.arquivo_url && !isAudio ? (
+                        <Pressable onPress={() => abrirArquivo(m)} style={styles.fileCard}>
+                          <View style={styles.fileIcon}>{m.arquivo_tipo === 'imagem' ? <PhotoIcon color="#78f25f" /> : <FileIcon color="#78f25f" />}</View>
                           <View style={styles.fileMeta}>
-                            <Text style={styles.fileName} numberOfLines={2}>{m.arquivo_nome || 'Documento.pdf'}</Text>
-                            <Text style={styles.fileType}>{m.arquivo_tipo === 'audio' ? 'Mensagem de áudio' : m.arquivo_tipo === 'pdf' ? 'Documento PDF' : 'Arquivo'}</Text>
+                            <Text style={styles.fileName} numberOfLines={2}>{m.arquivo_nome || 'Documento'}</Text>
+                            <Text style={styles.fileType}>{m.arquivo_tipo === 'pdf' ? 'Documento PDF' : m.arquivo_tipo === 'imagem' ? 'Imagem' : 'Arquivo'}</Text>
                           </View>
                           <Text style={styles.fileArrow}>›</Text>
                         </Pressable>
                       ) : null}
                       {m.texto ? <Text style={[styles.messageText, m.autor === 'paciente' && styles.mineText]}>{m.texto}</Text> : null}
                       <View style={styles.metaRow}>
-                        <Text style={[styles.time, m.autor === 'paciente' && styles.mineTime]}>
-                          {new Date(m.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                        {m.autor === 'paciente' ? (
-                          <Text style={[styles.delivery, m.lido_medico_em && styles.deliveryRead]}>
-                            {m.lido_medico_em ? '✓✓ Visualizado' : '✓ Enviado'}
-                          </Text>
-                        ) : null}
+                        <Text style={[styles.time, m.autor === 'paciente' && styles.mineTime]}>{new Date(m.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                        {m.autor === 'paciente' ? <Text style={[styles.delivery, m.lido_medico_em && styles.deliveryRead]}>{m.lido_medico_em ? '✓✓ Visualizado' : '✓ Enviado'}</Text> : null}
                       </View>
                     </View>
                   </View>
@@ -243,39 +485,74 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 
         {!somenteLeitura ? (
           <View style={styles.composerArea}>
+            {menuAnexo && !recorderState.isRecording ? (
+              <View style={styles.attachmentMenu}>
+                <Pressable onPress={abrirCamera} style={styles.attachmentOption}><View style={styles.attachmentIcon}><CameraIcon /></View><Text style={styles.attachmentLabel}>Câmera</Text></Pressable>
+                <Pressable onPress={abrirFotos} style={styles.attachmentOption}><View style={styles.attachmentIcon}><PhotoIcon /></View><Text style={styles.attachmentLabel}>Fotos</Text></Pressable>
+                <Pressable onPress={abrirDocumento} style={styles.attachmentOption}><View style={styles.attachmentIcon}><FileIcon /></View><Text style={styles.attachmentLabel}>Documento</Text></Pressable>
+              </View>
+            ) : null}
+
             {respondendo ? (
               <View style={styles.replyComposer}>
                 <View style={styles.replyComposerBody}>
                   <Text style={styles.replyComposerLabel}>Respondendo a {respondendo.autor === 'paciente' ? 'você' : (medicoNome || 'médico')}</Text>
                   <Text style={styles.replyComposerText} numberOfLines={1}>{resumoMensagem(respondendo)}</Text>
                 </View>
-                <Pressable onPress={() => setRespondendo(null)} style={styles.replyClose} accessibilityLabel="Cancelar resposta">
-                  <Text style={styles.replyCloseText}>×</Text>
-                </Pressable>
+                <Pressable onPress={() => setRespondendo(null)} style={styles.replyClose} accessibilityLabel="Cancelar resposta"><CloseIcon /></Pressable>
               </View>
             ) : null}
-            <View style={styles.composer}>
-              <TextInput
-                ref={inputRef}
-                value={texto}
-                onChangeText={setTexto}
-                placeholder="Escreva uma mensagem..."
-                placeholderTextColor="#6f7d78"
-                style={styles.input}
-                multiline
-                maxLength={3000}
-                editable={!enviando}
-                returnKeyType="send"
-                submitBehavior="submit"
-                onSubmitEditing={enviar}
-              />
-              <Pressable onPress={enviar} disabled={!texto.trim() || enviando} style={[styles.send, (!texto.trim() || enviando) && styles.sendDisabled]}>
-                {enviando ? <ActivityIndicator color="#07100f" size="small" /> : <Text style={styles.sendText}>↑</Text>}
-              </Pressable>
-            </View>
+
+            {recorderState.isRecording ? (
+              <View style={styles.recordingBar}>
+                <Pressable onPress={() => finalizarAudio(false)} style={styles.recordCancel} accessibilityLabel="Cancelar áudio"><CloseIcon color="#a9b5b0" /></Pressable>
+                <View style={styles.recordDot} />
+                <Text style={styles.recordingText}>Gravando {formatDuration(recorderState.durationMillis / 1000)}</Text>
+                <Pressable onPress={() => finalizarAudio(true)} style={styles.recordSend} accessibilityLabel="Enviar áudio"><SendIcon /></Pressable>
+              </View>
+            ) : (
+              <View style={styles.composer}>
+                <Pressable onPress={() => setMenuAnexo((v) => !v)} style={styles.iconButton} accessibilityLabel="Anexar"><ClipIcon /></Pressable>
+                <TextInput
+                  ref={inputRef}
+                  value={texto}
+                  onChangeText={setTexto}
+                  onFocus={() => setMenuAnexo(false)}
+                  placeholder="Escreva uma mensagem..."
+                  placeholderTextColor="#6f7d78"
+                  style={styles.input}
+                  multiline
+                  maxLength={3000}
+                  editable={!enviando}
+                  returnKeyType="send"
+                  submitBehavior="submit"
+                  onSubmitEditing={enviar}
+                />
+                {texto.trim() ? (
+                  <Pressable onPress={enviar} disabled={enviando} style={[styles.send, enviando && styles.sendDisabled]} accessibilityLabel="Enviar mensagem">{enviando ? <ActivityIndicator color="#07100f" size="small" /> : <SendIcon />}</Pressable>
+                ) : (
+                  <Pressable onPress={iniciarAudio} disabled={enviando} style={styles.iconButton} accessibilityLabel="Gravar áudio"><MicIcon /></Pressable>
+                )}
+              </View>
+            )}
           </View>
         ) : null}
       </KeyboardAvoidingView>
+
+      <Modal visible={!!viewer} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setViewer(null)}>
+        <SafeAreaView style={styles.viewerSafe}>
+          <View style={styles.viewerHeader}>
+            <Pressable onPress={() => setViewer(null)} style={styles.viewerBack} accessibilityLabel="Fechar documento"><Text style={styles.backText}>‹</Text></Pressable>
+            <Text style={styles.viewerTitle} numberOfLines={1}>{viewer?.name || 'Documento'}</Text>
+            <View style={{ width: 42 }} />
+          </View>
+          {viewer?.type === 'imagem' ? (
+            <View style={styles.imageViewer}><Image source={{ uri: viewer.url }} style={styles.viewerImage} resizeMode="contain" /></View>
+          ) : viewer?.url ? (
+            <WebView source={{ uri: viewer.url }} style={styles.webview} startInLoadingState renderLoading={() => <View style={styles.center}><ActivityIndicator color="#16c783" /></View>} />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -283,60 +560,80 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
   screen: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
-  header: { minHeight: 88, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#16221f'), flexDirection: 'row', alignItems: 'center' },
+  header: { minHeight: 86, paddingHorizontal: 14, paddingTop: 7, paddingBottom: 11, flexDirection: 'row', alignItems: 'center' },
   backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
   backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
-  headerCenter: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 8 },
+  headerCenter: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 6 },
+  headerToggle: { width: 68, alignItems: 'flex-end' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783' },
-  status: { flexShrink: 1, fontSize: 9, fontWeight: '800', letterSpacing: 1.1, color: themeColor('#18724f', '#79a493') },
-  doctor: { marginTop: 4, maxWidth: '100%', color: themeColor('#14201d', '#f2f7f4'), fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  id: { marginTop: 2, color: themeColor('#66736e', '#6e7e78'), fontSize: 11 },
+  status: { flexShrink: 1, fontSize: 9, fontWeight: '800', letterSpacing: 1, color: themeColor('#18724f', '#79a493') },
+  doctor: { marginTop: 4, maxWidth: '100%', color: themeColor('#14201d', '#f2f7f4'), fontSize: 15, fontWeight: '700', textAlign: 'center' },
+  id: { marginTop: 2, color: themeColor('#66736e', '#6e7e78'), fontSize: 10.5 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   messages: { flex: 1 },
-  messagesContent: { padding: 16, paddingBottom: 22 },
-  notice: { alignSelf: 'center', maxWidth: 310, backgroundColor: themeColor('#ffffff', '#0d1916'), borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 18 },
+  messagesContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 20 },
+  notice: { alignSelf: 'center', maxWidth: 310, backgroundColor: themeColor('#eef3f0', '#0d1916'), borderRadius: 13, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 16 },
   noticeText: { textAlign: 'center', color: themeColor('#66736e', '#899892'), fontSize: 11, lineHeight: 16 },
   empty: { marginTop: 42, alignItems: 'center', paddingHorizontal: 28 },
   emptyTitle: { color: themeColor('#26332f', '#dbe6e1'), fontSize: 16, fontWeight: '700' },
   emptyText: { color: themeColor('#66736e', '#75837e'), fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },
   swipeWrap: { position: 'relative' },
-  replyHint: { position: 'absolute', left: 8, top: '50%', marginTop: -17, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e7f7ee', '#10231d') },
-  replyHintIcon: { color: '#72a892', fontSize: 17, fontWeight: '800' },
-  messageRow: { width: '100%', marginVertical: 5 },
+  replyHint: { position: 'absolute', left: 9, top: '50%', marginTop: -16, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e7f4ed', '#10231d') },
+  messageRow: { width: '100%', marginVertical: 4 },
   mineRow: { alignItems: 'flex-end' },
   theirRow: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 7 },
-  mineBubble: { backgroundColor: themeColor('#dff7eb', '#123d31'), borderWidth: 1, borderColor: themeColor('#b7dfcb', '#1b5645'), borderBottomRightRadius: 6 },
-  theirBubble: { backgroundColor: themeColor('#ffffff', '#10201c'), borderWidth: 1, borderColor: themeColor('#dce5e0', '#1b302a'), borderBottomLeftRadius: 6 },
-  quotedMessage: { borderLeftWidth: 3, borderLeftColor: '#57947c', backgroundColor: themeColor('#f1f6f3', '#0c1916'), borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, marginBottom: 7, minWidth: 150 },
-  quotedAuthor: { color: '#76ad97', fontSize: 10, fontWeight: '800', marginBottom: 2 },
-  quotedText: { color: '#9eafa8', fontSize: 11, lineHeight: 15 },
-  messageText: { color: '#e7efeb', fontSize: 15, lineHeight: 21 },
-  mineText: { color: '#edf7f3' },
-  fileCard: { minWidth: 210, maxWidth: 285, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
-  fileIcon: { width: 38, height: 44, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#182b26', borderWidth: 1, borderColor: '#29453c' },
-  fileIconText: { color: '#94b5a8', fontSize: 8, fontWeight: '800', letterSpacing: 0.4 },
+  bubble: { maxWidth: '86%', borderRadius: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 7 },
+  mineBubble: { backgroundColor: themeColor('#dff5ea', '#123d31'), borderBottomRightRadius: 6 },
+  theirBubble: { backgroundColor: themeColor('#ffffff', '#10201c'), borderBottomLeftRadius: 6 },
+  quotedMessage: { backgroundColor: themeColor('#edf3f0', '#0c1916'), borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7, marginBottom: 7, minWidth: 150 },
+  quotedAuthor: { color: themeColor('#18724f', '#76ad97'), fontSize: 10, fontWeight: '800', marginBottom: 2 },
+  quotedText: { color: themeColor('#596763', '#9cad a6'.replace(' ','')), fontSize: 11, lineHeight: 15 },
+  messageText: { color: themeColor('#26332f', '#dce6e2'), fontSize: 14.5, lineHeight: 20 },
+  mineText: { color: themeColor('#193c31', '#edf8f3') },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginTop: 5 },
+  time: { color: themeColor('#7a8782', '#71807b'), fontSize: 9.5 },
+  mineTime: { color: themeColor('#567268', '#769087') },
+  delivery: { color: themeColor('#66736e', '#769087'), fontSize: 9.5, fontWeight: '700' },
+  deliveryRead: { color: themeColor('#0b8f61', '#78f25f') },
+  fileCard: { minWidth: 230, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: themeColor('#f3f7f5', '#0c1916'), borderRadius: 13, padding: 10, marginBottom: 7 },
+  fileIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e4f4ec', '#123027') },
   fileMeta: { flex: 1, minWidth: 0 },
-  fileName: { color: '#e1ebe7', fontSize: 13, lineHeight: 17, fontWeight: '700' },
-  fileType: { marginTop: 2, color: '#71857d', fontSize: 10 },
-  fileArrow: { color: '#8ba097', fontSize: 28, lineHeight: 30, marginLeft: 2 },
-  metaRow: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
-  time: { color: '#66766f', fontSize: 9 },
-  mineTime: { color: '#87a99c' },
-  delivery: { color: '#7f9c90', fontSize: 9, fontWeight: '600' },
-  deliveryRead: { color: '#9bd7bf' },
-  error: { color: '#d89090', fontSize: 11, textAlign: 'center', marginTop: 12 },
-  composerArea: { borderTopWidth: 1, borderTopColor: '#16221f', backgroundColor: '#091310' },
-  replyComposer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginTop: 8, paddingLeft: 10, paddingRight: 4, paddingVertical: 7, backgroundColor: '#0f1d19', borderRadius: 12, borderLeftWidth: 3, borderLeftColor: '#57947c' },
+  fileName: { color: themeColor('#14201d', '#eef5f1'), fontSize: 12.5, fontWeight: '800' },
+  fileType: { color: themeColor('#66736e', '#76867f'), fontSize: 10.5, marginTop: 2 },
+  fileArrow: { color: themeColor('#66736e', '#71807b'), fontSize: 24 },
+  audioCard: { minWidth: 230, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3, marginBottom: 4 },
+  audioPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: themeColor('#e4f4ec', '#123027'), alignItems: 'center', justifyContent: 'center' },
+  audioBody: { flex: 1 },
+  audioTrack: { height: 3, borderRadius: 2, backgroundColor: themeColor('#cfded7', '#28473c'), overflow: 'hidden' },
+  audioProgress: { height: 3, borderRadius: 2, backgroundColor: '#16c783' },
+  audioTime: { marginTop: 5, color: themeColor('#66736e', '#7f9189'), fontSize: 9.5 },
+  error: { color: '#f29aa1', textAlign: 'center', fontSize: 11.5, marginTop: 12 },
+  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 10, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  composer: { minHeight: 52, flexDirection: 'row', alignItems: 'flex-end', gap: 7, backgroundColor: themeColor('#ffffff', '#0d1916'), borderRadius: 19, padding: 5 },
+  iconButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, minHeight: 42, maxHeight: 110, paddingHorizontal: 4, paddingVertical: 10, color: themeColor('#14201d', '#eef5f1'), fontSize: 15 },
+  send: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
+  sendDisabled: { opacity: 0.55 },
+  attachmentMenu: { position: 'absolute', left: 12, bottom: 66, zIndex: 20, flexDirection: 'row', gap: 7, backgroundColor: themeColor('#ffffff', '#0d1916'), borderRadius: 17, padding: 8, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  attachmentOption: { width: 76, minHeight: 67, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: themeColor('#f3f7f5', '#101d1a') },
+  attachmentIcon: { height: 23, justifyContent: 'center' },
+  attachmentLabel: { color: themeColor('#52605b', '#a9b5b0'), fontSize: 10.5, fontWeight: '700' },
+  replyComposer: { flexDirection: 'row', alignItems: 'center', backgroundColor: themeColor('#eef3f0', '#0d1916'), borderRadius: 13, marginBottom: 6, paddingLeft: 12, minHeight: 48 },
   replyComposerBody: { flex: 1, minWidth: 0 },
-  replyComposerLabel: { color: '#7eb39d', fontSize: 10, fontWeight: '800' },
-  replyComposerText: { color: '#94a49e', fontSize: 11, marginTop: 2 },
-  replyClose: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  replyCloseText: { color: '#82918b', fontSize: 25, lineHeight: 27 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingHorizontal: 12, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 8 : 10 },
-  input: { flex: 1, maxHeight: 120, minHeight: 48, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#101d1a'), color: '#f1f6f3', fontSize: 15 },
-  send: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#16c783' },
-  sendDisabled: { opacity: 0.35 },
-  sendText: { color: '#07100f', fontSize: 24, fontWeight: '800', marginTop: -2 },
+  replyComposerLabel: { color: themeColor('#18724f', '#76ad97'), fontSize: 10.5, fontWeight: '800' },
+  replyComposerText: { color: themeColor('#66736e', '#95a59f'), fontSize: 11.5, marginTop: 2 },
+  replyClose: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  recordingBar: { minHeight: 52, flexDirection: 'row', alignItems: 'center', backgroundColor: themeColor('#ffffff', '#0d1916'), borderRadius: 19, padding: 5 },
+  recordCancel: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  recordDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#e15b64', marginLeft: 3, marginRight: 8 },
+  recordingText: { flex: 1, color: themeColor('#52605b', '#dce6e2'), fontSize: 13.5, fontWeight: '700' },
+  recordSend: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
+  viewerSafe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  viewerHeader: { minHeight: 64, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  viewerBack: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
+  viewerTitle: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '800' },
+  webview: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  imageViewer: { flex: 1, backgroundColor: themeColor('#eef2f0', '#040807'), alignItems: 'center', justifyContent: 'center' },
+  viewerImage: { width: '100%', height: '100%' },
 });
