@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  DynamicColorIOS,
   KeyboardAvoidingView,
   Linking,
   PanResponder,
@@ -14,6 +15,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+function themeColor(light: string, dark: string) {
+  return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
+}
 import {
   carregarChatPacienteV2,
   enviarMensagemChatPacienteV2,
@@ -55,12 +60,15 @@ function SwipeMessage({ mensagem, somenteLeitura, onReply, children }: SwipeProp
     [mensagem, onReply, somenteLeitura, x],
   );
 
+  const hintOpacity = x.interpolate({ inputRange: [0, 18, 52], outputRange: [0, 0.35, 1], extrapolate: 'clamp' });
+  const hintScale = x.interpolate({ inputRange: [0, 52], outputRange: [0.72, 1], extrapolate: 'clamp' });
+
   return (
     <View style={styles.swipeWrap}>
       {!somenteLeitura ? (
-        <View style={styles.replyHint} pointerEvents="none">
+        <Animated.View style={[styles.replyHint, { opacity: hintOpacity, transform: [{ scale: hintScale }] }]} pointerEvents="none">
           <Text style={styles.replyHintIcon}>↩</Text>
-        </View>
+        </Animated.View>
       ) : null}
       <Animated.View style={{ transform: [{ translateX: x }] }} {...responder.panHandlers}>
         {children}
@@ -220,7 +228,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
                         </Text>
                         {m.autor === 'paciente' ? (
                           <Text style={[styles.delivery, m.lido_medico_em && styles.deliveryRead]}>
-                            {m.lido_medico_em ? 'Visualizado' : 'Enviado'}
+                            {m.lido_medico_em ? '✓✓ Visualizado' : '✓ Enviado'}
                           </Text>
                         ) : null}
                       </View>
@@ -273,35 +281,35 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#07100f' },
-  screen: { flex: 1, backgroundColor: '#07100f' },
-  header: { minHeight: 88, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#16221f', flexDirection: 'row', alignItems: 'center' },
-  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0d1916' },
-  backText: { color: '#eef5f1', fontSize: 34, lineHeight: 36, marginTop: -3 },
+  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  screen: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  header: { minHeight: 88, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#16221f'), flexDirection: 'row', alignItems: 'center' },
+  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
+  backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
   headerCenter: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 8 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783' },
-  status: { flexShrink: 1, fontSize: 9, fontWeight: '800', letterSpacing: 1.1, color: '#79a493' },
-  doctor: { marginTop: 4, maxWidth: '100%', color: '#f2f7f4', fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  id: { marginTop: 2, color: '#6e7e78', fontSize: 11 },
+  status: { flexShrink: 1, fontSize: 9, fontWeight: '800', letterSpacing: 1.1, color: themeColor('#18724f', '#79a493') },
+  doctor: { marginTop: 4, maxWidth: '100%', color: themeColor('#14201d', '#f2f7f4'), fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  id: { marginTop: 2, color: themeColor('#66736e', '#6e7e78'), fontSize: 11 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   messages: { flex: 1 },
   messagesContent: { padding: 16, paddingBottom: 22 },
-  notice: { alignSelf: 'center', maxWidth: 310, backgroundColor: '#0d1916', borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 18 },
-  noticeText: { textAlign: 'center', color: '#899892', fontSize: 11, lineHeight: 16 },
+  notice: { alignSelf: 'center', maxWidth: 310, backgroundColor: themeColor('#ffffff', '#0d1916'), borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 18 },
+  noticeText: { textAlign: 'center', color: themeColor('#66736e', '#899892'), fontSize: 11, lineHeight: 16 },
   empty: { marginTop: 42, alignItems: 'center', paddingHorizontal: 28 },
-  emptyTitle: { color: '#dbe6e1', fontSize: 16, fontWeight: '700' },
-  emptyText: { color: '#75837e', fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },
+  emptyTitle: { color: themeColor('#26332f', '#dbe6e1'), fontSize: 16, fontWeight: '700' },
+  emptyText: { color: themeColor('#66736e', '#75837e'), fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },
   swipeWrap: { position: 'relative' },
-  replyHint: { position: 'absolute', left: 8, top: '50%', marginTop: -17, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#10231d' },
+  replyHint: { position: 'absolute', left: 8, top: '50%', marginTop: -17, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e7f7ee', '#10231d') },
   replyHintIcon: { color: '#72a892', fontSize: 17, fontWeight: '800' },
   messageRow: { width: '100%', marginVertical: 5 },
   mineRow: { alignItems: 'flex-end' },
   theirRow: { alignItems: 'flex-start' },
   bubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 7 },
-  mineBubble: { backgroundColor: '#123d31', borderWidth: 1, borderColor: '#1b5645', borderBottomRightRadius: 6 },
-  theirBubble: { backgroundColor: '#10201c', borderWidth: 1, borderColor: '#1b302a', borderBottomLeftRadius: 6 },
-  quotedMessage: { borderLeftWidth: 3, borderLeftColor: '#57947c', backgroundColor: '#0c1916', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, marginBottom: 7, minWidth: 150 },
+  mineBubble: { backgroundColor: themeColor('#dff7eb', '#123d31'), borderWidth: 1, borderColor: themeColor('#b7dfcb', '#1b5645'), borderBottomRightRadius: 6 },
+  theirBubble: { backgroundColor: themeColor('#ffffff', '#10201c'), borderWidth: 1, borderColor: themeColor('#dce5e0', '#1b302a'), borderBottomLeftRadius: 6 },
+  quotedMessage: { borderLeftWidth: 3, borderLeftColor: '#57947c', backgroundColor: themeColor('#f1f6f3', '#0c1916'), borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, marginBottom: 7, minWidth: 150 },
   quotedAuthor: { color: '#76ad97', fontSize: 10, fontWeight: '800', marginBottom: 2 },
   quotedText: { color: '#9eafa8', fontSize: 11, lineHeight: 15 },
   messageText: { color: '#e7efeb', fontSize: 15, lineHeight: 21 },
@@ -327,7 +335,7 @@ const styles = StyleSheet.create({
   replyClose: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   replyCloseText: { color: '#82918b', fontSize: 25, lineHeight: 27 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingHorizontal: 12, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 8 : 10 },
-  input: { flex: 1, maxHeight: 120, minHeight: 48, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 18, backgroundColor: '#101d1a', color: '#f1f6f3', fontSize: 15 },
+  input: { flex: 1, maxHeight: 120, minHeight: 48, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#101d1a'), color: '#f1f6f3', fontSize: 15 },
   send: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#16c783' },
   sendDisabled: { opacity: 0.35 },
   sendText: { color: '#07100f', fontSize: 24, fontWeight: '800', marginTop: -2 },

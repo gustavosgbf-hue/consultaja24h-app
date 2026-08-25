@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  DynamicColorIOS,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+
+function themeColor(light: string, dark: string) {
+  return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
+}
 import LegacyApp from '../App';
 import {
   carregarAtendimentoEmAndamento,
@@ -163,13 +169,13 @@ export default function AppRoot() {
 }
 
 const styles = StyleSheet.create({
-  appWrap: { flex: 1, backgroundColor: '#07100f' },
-  safe: { flex: 1, backgroundColor: '#07100f' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#07100f' },
+  appWrap: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
   wrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   brandBlock: { marginBottom: 22 },
-  brand: { color: '#fff', fontSize: 30, fontWeight: '800', letterSpacing: -1 },
-  subtitle: { color: '#8a97a6', fontSize: 14, marginTop: 6 },
+  brand: { color: themeColor('#14201d', '#fff'), fontSize: 30, fontWeight: '800', letterSpacing: -1 },
+  subtitle: { color: themeColor('#66736e', '#8a97a6'), fontSize: 14, marginTop: 6 },
   secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#8fa098', fontSize: 13, fontWeight: '700' },
   resumeButton: {
@@ -182,9 +188,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10201d',
+    backgroundColor: themeColor('#eef7f1', '#10201d'),
     borderWidth: 1,
-    borderColor: '#285746',
+    borderColor: themeColor('#b9d9ca', '#285746'),
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -193,7 +199,7 @@ const styles = StyleSheet.create({
   },
   resumeDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#78f25f', marginRight: 11 },
   resumeTextWrap: { flex: 1 },
-  resumeTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  resumeText: { color: '#91a29b', fontSize: 11.5, marginTop: 3 },
-  resumeArrow: { color: '#78f25f', fontSize: 28, lineHeight: 30, marginLeft: 8 },
+  resumeTitle: { color: themeColor('#14201d', '#fff'), fontSize: 14, fontWeight: '800' },
+  resumeText: { color: themeColor('#66736e', '#91a29b'), fontSize: 11.5, marginTop: 3 },
+  resumeArrow: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 28, lineHeight: 30, marginLeft: 8 },
 });

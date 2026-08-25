@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DynamicColorIOS,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -13,6 +14,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+function themeColor(light: string, dark: string) {
+  return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
+}
 import {
   atualizarAtendimento,
   carregarAgendamentos,
@@ -32,6 +37,7 @@ import {
 } from './src/auth/session';
 import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
+import ThemeToggle from './src/components/ThemeToggle';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
@@ -159,6 +165,7 @@ export default function App() {
   const [historico, setHistorico] = useState<AtendimentoHistorico[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoPaciente[]>([]);
   const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);
+  const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
 
   useEffect(() => {
@@ -398,7 +405,7 @@ export default function App() {
   if (tela === 'documentos') {
     return <DocumentosPaciente documentos={documentos} onVoltar={() => setTela('home')} onAbrirConsulta={(id) => {
       const item = historico.find((h) => h.id === id) || null;
-      if (item) { setHistoricoSelecionado(item); setTela('historico-chat'); }
+      if (item) { setHistoricoOrigem('documentos'); setHistoricoSelecionado(item); setTela('historico-chat'); }
     }} />;
   }
 
@@ -408,7 +415,7 @@ export default function App() {
         atendimentoId={historicoSelecionado.id}
         medicoNome={historicoSelecionado.medico_nome || historicoSelecionado.profissional_nome}
         somenteLeitura
-        onVoltar={() => { setTela('home'); setHistoricoSelecionado(null); }}
+        onVoltar={() => { setTela(historicoOrigem === 'documentos' ? 'documentos' : 'home'); setHistoricoSelecionado(null); }}
       />
     );
   }
@@ -426,7 +433,7 @@ export default function App() {
       onPerfil={() => setTela('perfil')}
       onNovaConsulta={() => setTela('nova-consulta')}
       onDocumentos={() => setTela('documentos')}
-      onAbrirAtendimento={(item) => { setHistoricoSelecionado(item); setTela('historico-chat'); }}
+      onAbrirAtendimento={(item) => { setHistoricoOrigem('home'); setHistoricoSelecionado(item); setTela('historico-chat'); }}
     />
   );
 }
@@ -462,9 +469,12 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
             <Text style={styles.greeting}>Olá, {primeiroNome}</Text>
             <Text style={styles.homeSubtitle}>O que você precisa hoje?</Text>
           </View>
-          <Pressable onPress={onPerfil} style={styles.avatarButton} accessibilityLabel="Abrir perfil">
-            <Text style={styles.avatarText}>{primeiroNome.slice(0, 1).toUpperCase()}</Text>
-          </Pressable>
+          <View style={styles.topActions}>
+            <ThemeToggle />
+            <Pressable onPress={onPerfil} style={styles.avatarButton} accessibilityLabel="Abrir perfil">
+              <Text style={styles.avatarText}>{primeiroNome.slice(0, 1).toUpperCase()}</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.heroCard}>
@@ -525,7 +535,13 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
         )}
 
         <Pressable onPress={onDocumentos} style={styles.docsCard}>
-          <View style={styles.docsIcon}><Text style={styles.docsIconText}>PDF</Text></View>
+          <View style={styles.docsIcon}>
+            <View style={styles.docsGlyph}>
+              <View style={styles.docsGlyphFold} />
+              <View style={styles.docsGlyphLine} />
+              <View style={[styles.docsGlyphLine, styles.docsGlyphLineShort]} />
+            </View>
+          </View>
           <View style={{ flex: 1 }}><Text style={styles.docsTitle}>Meus documentos</Text><Text style={styles.docsText}>{documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} disponível${documentos.length === 1 ? '' : 'is'}` : 'Receitas, atestados e pedidos ficarão reunidos aqui.'}</Text></View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
@@ -958,12 +974,12 @@ function EmptyCard({ title, text }: { title: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#07100f' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#07100f' },
+  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#f6f8f7', '#07100f') },
   loginWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
   brandBlock: { marginBottom: 22 },
-  brand: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1.2 },
-  subtitle: { color: '#8a97a6', marginTop: 6, fontSize: 16 },
+  brand: { color: themeColor('#14201d', '#fff'), fontSize: 34, fontWeight: '700', letterSpacing: -1.2 },
+  subtitle: { color: themeColor('#66736e', '#8a97a6'), marginTop: 6, fontSize: 16 },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 22 },
   badge: { alignSelf: 'flex-start', backgroundColor: '#eafaf3', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 14 },
   badgeText: { color: '#0b8f61', fontSize: 10, fontWeight: '800', letterSpacing: .9 },
@@ -979,8 +995,8 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 54, backgroundColor: '#16c783', borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
   buttonLoading: { opacity: .75 },
   primaryButtonText: { color: '#07100f', fontSize: 16, fontWeight: '800' },
-  privacyText: { color: '#84908c', fontSize: 11.5, lineHeight: 17, marginTop: 14 },
-  helperText: { color: '#8a97a6', fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 16, paddingHorizontal: 16 },
+  privacyText: { color: themeColor('#66736e', '#84908c'), fontSize: 11.5, lineHeight: 17, marginTop: 14 },
+  helperText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 16, paddingHorizontal: 16 },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20 },
   singleSecondary: { alignItems: 'center', marginTop: 18 },
   secondaryActionText: { color: '#0b8f61', fontSize: 13, fontWeight: '700' },
@@ -988,131 +1004,136 @@ const styles = StyleSheet.create({
 
   home: { padding: 20, paddingBottom: 48 },
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   kicker: { color: '#16c783', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  greeting: { color: '#fff', fontSize: 30, fontWeight: '800', marginTop: 3, letterSpacing: -.6 },
-  homeSubtitle: { color: '#8a97a6', fontSize: 14, marginTop: 4 },
-  avatarButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#10201d', borderWidth: 1, borderColor: '#275044', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#78f25f', fontSize: 17, fontWeight: '800' },
-  heroCard: { backgroundColor: '#10201d', borderWidth: 1, borderColor: '#21483c', borderRadius: 24, padding: 22, marginBottom: 14 },
+  greeting: { color: themeColor('#14201d', '#fff'), fontSize: 30, fontWeight: '800', marginTop: 3, letterSpacing: -.6 },
+  homeSubtitle: { color: themeColor('#66736e', '#8a97a6'), fontSize: 14, marginTop: 4 },
+  avatarButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#c6ddd2', '#275044'), alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 17, fontWeight: '800' },
+  heroCard: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#cbe2d7', '#21483c'), borderRadius: 24, padding: 22, marginBottom: 14 },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#78f25f' },
-  heroEyebrow: { color: '#78f25f', fontSize: 10.5, fontWeight: '800', letterSpacing: 1.1 },
-  heroTitle: { color: '#fff', fontSize: 25, fontWeight: '800', lineHeight: 31, marginTop: 10, letterSpacing: -.35 },
-  heroText: { color: '#a9b5b0', lineHeight: 21, marginTop: 9, marginBottom: 14 },
+  heroEyebrow: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '800', letterSpacing: 1.1 },
+  heroTitle: { color: themeColor('#14201d', '#fff'), fontSize: 25, fontWeight: '800', lineHeight: 31, marginTop: 10, letterSpacing: -.35 },
+  heroText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 21, marginTop: 9, marginBottom: 14 },
   quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', padding: 15 },
+  quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), padding: 15 },
   quickCardFeatured: { borderColor: '#346342', backgroundColor: '#101d14' },
-  quickTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  quickTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
   quickTitleFeatured: { color: '#dfff9e' },
-  quickSubtitle: { color: '#84908c', fontSize: 12, lineHeight: 17, marginTop: 5 },
+  quickSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   quickArrow: { color: '#16c783', fontSize: 20, marginTop: 'auto' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 },
-  sectionTitle: { color: '#fff', fontSize: 19, fontWeight: '800' },
+  sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 19, fontWeight: '800' },
   sectionAction: { color: '#16c783', fontSize: 13, fontWeight: '700' },
   lastCard: { backgroundColor: '#f7fbf8', borderRadius: 20, padding: 18, marginBottom: 27 },
   lastTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   datePill: { backgroundColor: '#e5f7eb', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   datePillText: { color: '#18724f', fontSize: 11, fontWeight: '800' },
-  statusText: { color: '#75827e', fontSize: 11, fontWeight: '700' },
+  statusText: { color: themeColor('#66736e', '#75827e'), fontSize: 11, fontWeight: '700' },
   lastDoctor: { color: '#14201d', fontSize: 17, fontWeight: '800', marginTop: 14 },
   lastSummary: { color: '#596763', lineHeight: 20, marginTop: 6 },
   historyCard: { marginBottom: 9 },
-  historyLine: { flexDirection: 'row', backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 17, padding: 15 },
+  historyLine: { flexDirection: 'row', backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 17, padding: 15 },
   timelineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#16c783', marginTop: 5, marginRight: 12 },
   historyBody: { flex: 1 },
-  historyTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  historyTitle: { color: themeColor('#14201d', '#fff'), fontWeight: '800', fontSize: 15 },
   historyMeta: { color: '#769087', fontSize: 12, marginTop: 4 },
-  historyText: { color: '#9ba9a4', fontSize: 13, lineHeight: 19, marginTop: 8 },
-  emptyCard: { borderWidth: 1, borderColor: '#1d342f', backgroundColor: '#0b1715', borderRadius: 16, padding: 18, marginBottom: 24 },
-  emptyTitle: { color: '#fff', fontWeight: '700' },
-  emptyText: { color: '#8a97a6', marginTop: 5, lineHeight: 19 },
-  appointmentCard: { borderWidth: 1, borderColor: '#1d342f', backgroundColor: '#0b1715', borderRadius: 16, padding: 17, marginBottom: 10 },
-  appointmentName: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  appointmentMeta: { color: '#a9b5b0', marginTop: 5 },
-  docsCard: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, padding: 16, marginTop: 25 },
-  docsIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#123027', alignItems: 'center', justifyContent: 'center' },
-  docsIconText: { color: '#78f25f', fontSize: 25, fontWeight: '400', marginTop: -2 },
-  docsTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  historyText: { color: themeColor('#596763', '#9ba9a4'), fontSize: 13, lineHeight: 19, marginTop: 8 },
+  emptyCard: { borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), backgroundColor: themeColor('#ffffff', '#0b1715'), borderRadius: 16, padding: 18, marginBottom: 24 },
+  emptyTitle: { color: themeColor('#14201d', '#fff'), fontWeight: '700' },
+  emptyText: { color: themeColor('#66736e', '#8a97a6'), marginTop: 5, lineHeight: 19 },
+  appointmentCard: { borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), backgroundColor: themeColor('#ffffff', '#0b1715'), borderRadius: 16, padding: 17, marginBottom: 10 },
+  appointmentName: { color: themeColor('#14201d', '#fff'), fontWeight: '700', fontSize: 16 },
+  appointmentMeta: { color: themeColor('#5f6c67', '#a9b5b0'), marginTop: 5 },
+  docsCard: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginTop: 25 },
+  docsIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: themeColor('#e7f7ee', '#123027'), alignItems: 'center', justifyContent: 'center' },
+  docsIconText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 25, fontWeight: '400', marginTop: -2 },
+  docsGlyph: { width: 18, height: 22, borderWidth: 1.7, borderColor: themeColor('#0b8f61', '#78f25f'), borderRadius: 3, paddingTop: 8, paddingHorizontal: 3 },
+  docsGlyphFold: { position: 'absolute', right: -1.7, top: -1.7, width: 7, height: 7, borderLeftWidth: 1.7, borderBottomWidth: 1.7, borderColor: themeColor('#0b8f61', '#78f25f'), backgroundColor: themeColor('#e7f7ee', '#123027'), borderBottomLeftRadius: 2 },
+  docsGlyphLine: { height: 1.5, borderRadius: 1, backgroundColor: themeColor('#0b8f61', '#78f25f'), marginBottom: 3 },
+  docsGlyphLineShort: { width: '65%' },
+  docsTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
   openHistoryHint: { marginTop: 12, color: '#68c99a', fontSize: 12, fontWeight: '700' },
   historyOpen: { marginTop: 7, color: '#67bd94', fontSize: 11, fontWeight: '700' },
-  documentItem: { backgroundColor: '#0d1916', borderWidth: 1, borderColor: '#1b2b26', borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
+  documentItem: { backgroundColor: themeColor('#ffffff', '#0d1916'), borderWidth: 1, borderColor: themeColor('#dfe7e2', '#1b2b26'), borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
   documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15 },
-  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#14231f', borderWidth: 1, borderColor: '#28463b' },
+  documentPdf: { width: 44, height: 50, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef4f1', '#14231f'), borderWidth: 1, borderColor: '#28463b' },
   documentPdfText: { color: '#91b4a6', fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   documentInfo: { flex: 1, minWidth: 0 },
-  documentName: { color: '#eef5f1', fontSize: 14, lineHeight: 19, fontWeight: '800' },
-  documentMeta: { color: '#76867f', fontSize: 11, marginTop: 4 },
-  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#192823' },
+  documentName: { color: themeColor('#14201d', '#eef5f1'), fontSize: 14, lineHeight: 19, fontWeight: '800' },
+  documentMeta: { color: themeColor('#66736e', '#76867f'), fontSize: 11, marginTop: 4 },
+  documentConsultButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: themeColor('#e0e8e4', '#192823') },
   documentConsultText: { color: '#69c99a', fontSize: 12, fontWeight: '800' },
-  docsText: { color: '#84908c', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  docsText: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 3 },
   chevron: { color: '#66736e', fontSize: 27 },
   refreshButton: { alignItems: 'center', marginTop: 22, paddingVertical: 12 },
-  refreshText: { color: '#71807b', fontWeight: '700', fontSize: 13 },
+  refreshText: { color: themeColor('#66736e', '#71807b'), fontWeight: '700', fontSize: 13 },
 
   pageWrap: { padding: 20, paddingBottom: 50 },
   pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-  backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', alignItems: 'center', justifyContent: 'center' },
-  backText: { color: '#fff', fontSize: 30, lineHeight: 32, marginTop: -3 },
-  pageTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  pageLead: { color: '#a9b5b0', lineHeight: 21, marginTop: -7, marginBottom: 18 },
+  backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), alignItems: 'center', justifyContent: 'center' },
+  backText: { color: themeColor('#14201d', '#fff'), fontSize: 30, lineHeight: 32, marginTop: -3 },
+  pageTitle: { color: themeColor('#14201d', '#fff'), fontSize: 20, fontWeight: '800' },
+  pageLead: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 21, marginTop: -7, marginBottom: 18 },
   profileHero: { alignItems: 'center', marginBottom: 22 },
-  profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#10201d', borderWidth: 1, borderColor: '#275044', alignItems: 'center', justifyContent: 'center' },
-  profileAvatarText: { color: '#78f25f', fontSize: 27, fontWeight: '800' },
-  profileName: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 13, textAlign: 'center' },
-  profileHint: { color: '#8a97a6', fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 5, maxWidth: 290 },
-  profileCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, paddingHorizontal: 17 },
-  infoRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1d342f' },
-  infoLabel: { color: '#71807b', fontSize: 11, fontWeight: '800', letterSpacing: .6, textTransform: 'uppercase' },
-  infoValue: { color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 5 },
-  profileNotice: { backgroundColor: '#10201d', borderRadius: 16, padding: 16, marginTop: 14 },
-  profileNoticeTitle: { color: '#78f25f', fontWeight: '800', fontSize: 13 },
-  profileNoticeText: { color: '#a9b5b0', lineHeight: 19, fontSize: 12.5, marginTop: 6 },
+  profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#c6ddd2', '#275044'), alignItems: 'center', justifyContent: 'center' },
+  profileAvatarText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 27, fontWeight: '800' },
+  profileName: { color: themeColor('#14201d', '#fff'), fontSize: 22, fontWeight: '800', marginTop: 13, textAlign: 'center' },
+  profileHint: { color: themeColor('#66736e', '#8a97a6'), fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 5, maxWidth: 290 },
+  profileCard: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, paddingHorizontal: 17 },
+  infoRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f') },
+  infoLabel: { color: themeColor('#66736e', '#71807b'), fontSize: 11, fontWeight: '800', letterSpacing: .6, textTransform: 'uppercase' },
+  infoValue: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '700', marginTop: 5 },
+  profileNotice: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 16, padding: 16, marginTop: 14 },
+  profileNoticeTitle: { color: themeColor('#0b8f61', '#78f25f'), fontWeight: '800', fontSize: 13 },
+  profileNoticeText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 19, fontSize: 12.5, marginTop: 6 },
   logoutButton: { borderWidth: 1, borderColor: '#603438', backgroundColor: '#1a1112', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
   logoutButtonText: { color: '#ff9ca5', fontSize: 14, fontWeight: '800' },
 
   choiceRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  choiceCard: { flex: 1, minHeight: 120, borderRadius: 18, backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', padding: 15 },
-  choiceCardActive: { borderColor: '#16c783', backgroundColor: '#0f211c' },
+  choiceCard: { flex: 1, minHeight: 120, borderRadius: 18, backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), padding: 15 },
+  choiceCardActive: { borderColor: '#16c783', backgroundColor: themeColor('#eef7f1', '#0f211c') },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#50605a', alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
   radioActive: { borderColor: '#16c783' },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16c783' },
-  choiceTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  choiceSubtitle: { color: '#84908c', fontSize: 12, lineHeight: 17, marginTop: 5 },
+  choiceTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
+  choiceSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   identityCard: { backgroundColor: '#f7fbf8', borderRadius: 18, padding: 17, marginBottom: 22 },
   identityKicker: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   identityName: { color: '#14201d', fontSize: 18, fontWeight: '800', marginTop: 8 },
   identityMeta: { color: '#66736e', fontSize: 12.5, marginTop: 4 },
-  formCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, padding: 16, marginBottom: 22 },
+  formCard: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginBottom: 22 },
   inputLabelDark: { color: '#d6dfdb', fontSize: 12.5, fontWeight: '700', marginBottom: 7 },
-  darkInput: { backgroundColor: '#101d1a', borderWidth: 1, borderColor: '#223a34', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: '#fff', fontSize: 15 },
-  formSectionTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 10 },
+  darkInput: { backgroundColor: themeColor('#ffffff', '#101d1a'), borderWidth: 1, borderColor: themeColor('#d8e3dd', '#223a34'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
+  formSectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18, fontWeight: '800', marginBottom: 10 },
   textArea: { minHeight: 128, paddingTop: 14 },
   counter: { color: '#64736e', fontSize: 11, textAlign: 'right', marginTop: -7, marginBottom: 20 },
-  flowPreview: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#1d342f', borderRadius: 18, padding: 16, marginBottom: 17 },
-  flowPreviewTitle: { color: '#fff', fontSize: 15, fontWeight: '800', marginBottom: 5 },
-  flowRow: { flexDirection: 'row', gap: 12, borderBottomWidth: 1, borderBottomColor: '#1d342f', paddingVertical: 13 },
-  flowNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#123027', alignItems: 'center', justifyContent: 'center' },
-  flowNumberText: { color: '#78f25f', fontSize: 12, fontWeight: '900' },
-  flowTitle: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
-  flowText: { color: '#8a97a6', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  flowPreview: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#dce6e1', '#1d342f'), borderRadius: 18, padding: 16, marginBottom: 17 },
+  flowPreviewTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800', marginBottom: 5 },
+  flowRow: { flexDirection: 'row', gap: 12, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f'), paddingVertical: 13 },
+  flowNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: themeColor('#e7f7ee', '#123027'), alignItems: 'center', justifyContent: 'center' },
+  flowNumberText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 12, fontWeight: '900' },
+  flowTitle: { color: themeColor('#14201d', '#fff'), fontSize: 13.5, fontWeight: '800' },
+  flowText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12, lineHeight: 17, marginTop: 3 },
 
-  paidBadge: { alignSelf: 'flex-start', backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginTop: -8, marginBottom: 12 },
-  paidBadgeText: { color: '#78f25f', fontSize: 9.5, fontWeight: '900', letterSpacing: .7 },
+  paidBadge: { alignSelf: 'flex-start', backgroundColor: themeColor('#e7f7ee', '#123027'), borderWidth: 1, borderColor: themeColor('#b9d9ca', '#285746'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, marginTop: -8, marginBottom: 12 },
+  paidBadgeText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .7 },
   triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
-  triageProgressText: { color: '#78f25f', fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
+  triageProgressText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
   triageChat: { flex: 1, marginTop: 2 },
   triageChatContent: { paddingBottom: 18, gap: 11 },
-  patientBubble: { alignSelf: 'stretch', backgroundColor: '#10201d', borderWidth: 1, borderColor: '#21483c', borderRadius: 17, padding: 15 },
-  patientBubbleLabel: { color: '#78f25f', fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 6 },
-  patientBubbleText: { color: '#dce6e2', lineHeight: 20, fontSize: 14 },
+  patientBubble: { alignSelf: 'stretch', backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#cbe2d7', '#21483c'), borderRadius: 17, padding: 15 },
+  patientBubbleLabel: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 6 },
+  patientBubbleText: { color: themeColor('#26332f', '#dce6e2'), lineHeight: 20, fontSize: 14 },
   aiBubble: { alignSelf: 'flex-start', maxWidth: '88%', backgroundColor: '#f7fbf8', borderRadius: 17, borderBottomLeftRadius: 5, padding: 14 },
   aiBubbleLabel: { color: '#18724f', fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 5 },
   aiBubbleText: { color: '#26332f', lineHeight: 20, fontSize: 14 },
   userBubble: { alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: '#16c783', borderRadius: 17, borderBottomRightRadius: 5, paddingHorizontal: 14, paddingVertical: 11 },
   userBubbleText: { color: '#07100f', lineHeight: 19, fontSize: 14, fontWeight: '600' },
-  triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, borderTopWidth: 1, borderTopColor: '#1d342f', paddingTop: 12 },
-  triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: '#101d1a', borderWidth: 1, borderColor: '#223a34', borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: '#fff', fontSize: 15 },
+  triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, borderTopWidth: 1, borderTopColor: themeColor('#dce6e1', '#1d342f'), paddingTop: 12 },
+  triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: themeColor('#ffffff', '#101d1a'), borderWidth: 1, borderColor: themeColor('#d8e3dd', '#223a34'), borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
   sendButton: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
   sendButtonDisabled: { opacity: .35 },
   sendButtonText: { color: '#07100f', fontSize: 24, fontWeight: '900', marginTop: -2 },
@@ -1120,12 +1141,12 @@ const styles = StyleSheet.create({
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783', opacity: .65 },
 
   queueHero: { alignItems: 'center', paddingVertical: 22, paddingHorizontal: 8 },
-  queueCheck: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#123027', borderWidth: 1, borderColor: '#285746', alignItems: 'center', justifyContent: 'center' },
-  queueCheckText: { color: '#78f25f', fontSize: 31, fontWeight: '900' },
-  queueTitle: { color: '#fff', fontSize: 25, fontWeight: '900', marginTop: 15 },
-  queueText: { color: '#a9b5b0', fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8 },
-  queueCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#285746', borderRadius: 18, padding: 17, marginBottom: 15 },
-  queueKicker: { color: '#78f25f', fontSize: 10, fontWeight: '900', letterSpacing: .8 },
-  queueCardTitle: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 12 },
-  queueCardText: { color: '#8a97a6', fontSize: 12.5, lineHeight: 19, marginTop: 6 },
+  queueCheck: { width: 68, height: 68, borderRadius: 34, backgroundColor: themeColor('#e7f7ee', '#123027'), borderWidth: 1, borderColor: themeColor('#b9d9ca', '#285746'), alignItems: 'center', justifyContent: 'center' },
+  queueCheckText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 31, fontWeight: '900' },
+  queueTitle: { color: themeColor('#14201d', '#fff'), fontSize: 25, fontWeight: '900', marginTop: 15 },
+  queueText: { color: themeColor('#5f6c67', '#a9b5b0'), fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8 },
+  queueCard: { backgroundColor: themeColor('#ffffff', '#0b1715'), borderWidth: 1, borderColor: themeColor('#b9d9ca', '#285746'), borderRadius: 18, padding: 17, marginBottom: 15 },
+  queueKicker: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10, fontWeight: '900', letterSpacing: .8 },
+  queueCardTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18, fontWeight: '900', marginTop: 12 },
+  queueCardText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12.5, lineHeight: 19, marginTop: 6 },
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  DynamicColorIOS,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -8,6 +10,10 @@ import {
   Text,
   View,
 } from 'react-native';
+
+function themeColor(light: string, dark: string) {
+  return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
+}
 import {
   carregarAtendimentoEmAndamento,
   consultarStatusAtendimento,
@@ -136,22 +142,22 @@ export default function AtendimentoAtual({ atendimentoInicial, onVoltar, onAtual
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#07100f' },
+  safe: { flex: 1, backgroundColor: themeColor('#f6f8f7', '#07100f') },
   wrap: { flexGrow: 1, paddingHorizontal: 18, paddingBottom: 34 },
   header: { minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0d1916' },
-  backText: { color: '#edf5f1', fontSize: 34, lineHeight: 36, marginTop: -3 },
-  headerTitle: { color: '#eef5f1', fontSize: 16, fontWeight: '700' },
+  back: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
+  backText: { color: themeColor('#14201d', '#edf5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
+  headerTitle: { color: themeColor('#14201d', '#eef5f1'), fontSize: 16, fontWeight: '700' },
   hero: { marginTop: 38, alignItems: 'center', paddingHorizontal: 18 },
   pulseWrap: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0e241d' },
   pulse: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#16c783' },
   eyebrow: { marginTop: 22, color: '#76a895', fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  title: { marginTop: 8, color: '#f2f7f4', fontSize: 28, fontWeight: '800', textAlign: 'center' },
-  text: { marginTop: 10, color: '#91a29b', fontSize: 14, lineHeight: 21, textAlign: 'center', maxWidth: 330 },
+  title: { marginTop: 8, color: themeColor('#14201d', '#f2f7f4'), fontSize: 28, fontWeight: '800', textAlign: 'center' },
+  text: { marginTop: 10, color: themeColor('#66736e', '#91a29b'), fontSize: 14, lineHeight: 21, textAlign: 'center', maxWidth: 330 },
   position: { marginTop: 18, color: '#b9d1c8', fontSize: 13, fontWeight: '700' },
-  infoCard: { marginTop: 38, flexDirection: 'row', gap: 12, borderRadius: 18, padding: 16, backgroundColor: '#0d1916', borderWidth: 1, borderColor: '#172a24' },
+  infoCard: { marginTop: 38, flexDirection: 'row', gap: 12, borderRadius: 18, padding: 16, backgroundColor: themeColor('#ffffff', '#0d1916'), borderWidth: 1, borderColor: '#172a24' },
   infoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#16c783', marginTop: 5 },
-  infoTitle: { color: '#dce8e3', fontSize: 13, fontWeight: '700' },
+  infoTitle: { color: themeColor('#26332f', '#dce8e3'), fontSize: 13, fontWeight: '700' },
   infoText: { marginTop: 5, color: '#74857e', fontSize: 12, lineHeight: 18 },
   refresh: { marginTop: 20, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
   refreshText: { color: '#16c783', fontSize: 13, fontWeight: '700' },
