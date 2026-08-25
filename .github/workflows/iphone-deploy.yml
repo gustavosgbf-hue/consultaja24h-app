@@ -11,9 +11,10 @@ on:
           - ota
           - ios_build
           - submit_testflight
+          - finalize_release
         default: ota
       message:
-        description: Mensagem da OTA (usada apenas em ota)
+        description: Mensagem da OTA
         required: false
         type: string
         default: Atualização do app
@@ -21,6 +22,9 @@ on:
     branches: [main]
     paths:
       - '.deploy/request.json'
+
+permissions:
+  contents: write
 
 concurrency:
   group: iphone-deploy
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -68,9 +74,28 @@ jobs:
         if: ${{ steps.request.outputs.action != 'none' }}
         run: npm ci
 
+      - name: Apply final release patches
+        if: ${{ steps.request.outputs.action == 'finalize_release' }}
+        run: |
+          node scripts/apply-final-navigation-polish.mjs
+          node scripts/apply-private-doctor-ratings.mjs
+
       - name: Typecheck
         if: ${{ steps.request.outputs.action != 'none' }}
         run: npm run typecheck
+
+      - name: Persist final release source changes
+        if: ${{ steps.request.outputs.action == 'finalize_release' }}
+        run: |
+          if git diff --quiet; then
+            echo "Patches já estavam aplicados."
+          else
+            git config user.name "consultaja24h-deploy"
+            git config user.email "actions@users.noreply.github.com"
+            git add App.tsx src/AppRoot.tsx src/components/ChatPaciente.tsx src/api/avaliacao.ts
+            git commit -m "Apply final navigation polish and private ratings"
+            git push origin HEAD:main
+          fi
 
       - name: Verify Expo authentication
         if: ${{ steps.request.outputs.action != 'none' }}
@@ -82,7 +107,7 @@ jobs:
           npx eas-cli@latest whoami
 
       - name: Publish production OTA
-        if: ${{ steps.request.outputs.action == 'ota' }}
+        if: ${{ steps.request.outputs.action == 'ota' || steps.request.outputs.action == 'finalize_release' }}
         env:
           OTA_MESSAGE: ${{ steps.request.outputs.message }}
         run: npx eas-cli@latest update --channel production --message "$OTA_MESSAGE" --non-interactive
@@ -96,7 +121,7 @@ jobs:
         run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
 
       - name: Reject unknown request
-        if: ${{ steps.request.outputs.action != 'none' && steps.request.outputs.action != 'ota' && steps.request.outputs.action != 'ios_build' && steps.request.outputs.action != 'submit_testflight' }}
+        if: ${{ steps.request.outputs.action != 'none' && steps.request.outputs.action != 'ota' && steps.request.outputs.action != 'ios_build' && steps.request.outputs.action != 'submit_testflight' && steps.request.outputs.action != 'finalize_release' }}
         run: |
           echo "Ação desconhecida: ${{ steps.request.outputs.action }}"
           exit 1
