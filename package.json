@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node scripts/apply-attachment-confirm-and-swipe.mjs && tsc --noEmit"
   },
   "dependencies": {
     "expo": "~57.0.0",
