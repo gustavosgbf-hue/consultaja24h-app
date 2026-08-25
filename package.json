@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "node scripts/apply-attachment-confirm-and-swipe.mjs && node scripts/apply-light-theme-and-home-startup.mjs && tsc --noEmit"
+    "typecheck": "node scripts/apply-attachment-confirm-and-swipe.mjs && node scripts/apply-light-theme-and-home-startup.mjs && node scripts/apply-patient-profile-api.mjs && node scripts/apply-patient-profile-form.mjs && tsc --noEmit"
   },
   "dependencies": {
     "expo": "~57.0.0",
