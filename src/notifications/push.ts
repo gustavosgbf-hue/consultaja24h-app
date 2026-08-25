@@ -62,10 +62,11 @@ export function observarToquesEmPush(handler: (data: Record<string, unknown>) =>
     handler(data as Record<string, unknown>);
   });
 
-  Notifications.getLastNotificationResponseAsync().then((response) => {
+  Notifications.getLastNotificationResponseAsync().then(async (response) => {
     if (!response) return;
     const data = response.notification.request.content.data || {};
     handler(data as Record<string, unknown>);
+    await Notifications.clearLastNotificationResponseAsync().catch(() => {});
   }).catch(() => {});
 
   return () => subscription.remove();
