@@ -16,6 +16,12 @@ export type MensagemChatV2 = {
   lido_medico_em?: string | null;
 };
 
+export type UploadChatPaciente = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
 async function token() {
   const value = await getSessionToken();
   if (!value) throw new Error('Sessão não encontrada');
@@ -62,6 +68,34 @@ export async function enviarMensagemChatPacienteV2(
         texto,
         reply_to_id: replyToId || null,
       }),
+    },
+  );
+  if (response.status === 401) throw new Error('Sessão expirada');
+  return parseJson<{ ok: boolean; mensagem: MensagemChatV2 }>(response);
+}
+
+export async function enviarAnexoChatPacienteV2(
+  atendimentoId: number,
+  arquivo: UploadChatPaciente,
+  replyToId?: number | null,
+) {
+  const auth = await token();
+  const form = new FormData();
+  form.append('arquivo', {
+    uri: arquivo.uri,
+    name: arquivo.name,
+    type: arquivo.type,
+  } as unknown as Blob);
+  if (replyToId) form.append('reply_to_id', String(replyToId));
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/paciente/atendimento/${encodeURIComponent(String(atendimentoId))}/upload-v2`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${auth}`,
+      },
+      body: form,
     },
   );
   if (response.status === 401) throw new Error('Sessão expirada');
