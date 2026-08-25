@@ -5,7 +5,9 @@ import {
   Animated,
   DynamicColorIOS,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Linking,
+  PanResponder,
   Platform,
   Pressable,
   RefreshControl,
@@ -41,6 +43,7 @@ import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
 import ThemeToggle from './src/components/ThemeToggle';
 import DocumentViewer from './src/components/DocumentViewer';
+import { WebView } from 'react-native-webview';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
@@ -59,7 +62,7 @@ Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda 
 Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
 Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
-type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat';
+type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
 type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
 
@@ -196,6 +199,7 @@ export default function App() {
   const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);
   const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
+  const [webPage, setWebPage] = useState<{ title: string; url: string } | null>(null);
 
   useEffect(() => {
     restaurarSessao();
@@ -434,6 +438,14 @@ export default function App() {
     }} />;
   }
 
+  if (tela === 'servicos') {
+    return <ServicosSaude onVoltar={() => setTela('home')} onAbrir={(title, url) => { setWebPage({ title, url }); setTela('web'); }} />;
+  }
+
+  if (tela === 'web' && webPage) {
+    return <InternalWebScreen title={webPage.title} url={webPage.url} onVoltar={() => { setWebPage(null); setTela(webPage.title === 'Renovar receita' ? 'home' : 'servicos'); }} />;
+  }
+
   if (tela === 'historico-chat' && historicoSelecionado) {
     return (
       <ChatPaciente
@@ -458,12 +470,14 @@ export default function App() {
       onPerfil={() => setTela('perfil')}
       onNovaConsulta={() => setTela('nova-consulta')}
       onDocumentos={() => setTela('documentos')}
+      onRenovacao={() => { setWebPage({ title: 'Renovar receita', url: URL_RENOVACAO }); setTela('web'); }}
+      onEspecialistas={() => setTela('servicos')}
       onAbrirAtendimento={(item) => { setHistoricoOrigem('home'); setHistoricoSelecionado(item); setTela('historico-chat'); }}
     />
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onAbrirAtendimento }: {
+function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
@@ -475,6 +489,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
   onPerfil: () => void;
   onNovaConsulta: () => void;
   onDocumentos: () => void;
+  onRenovacao: () => void;
+  onEspecialistas: () => void;
   onAbrirAtendimento: (item: AtendimentoHistorico) => void;
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
@@ -524,8 +540,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
         </View>
 
         <View style={styles.quickGrid}>
-          <QuickCard title="Renovar receita" subtitle="Fluxo já disponível" onPress={() => abrirLink(URL_RENOVACAO)} featured />
-          <QuickCard title="Especialistas" subtitle="Escolha o profissional" onPress={() => abrirLink(URL_ESPECIALISTAS)} />
+          <QuickCard title="Renovar receita" subtitle="Solicite pelo app" onPress={onRenovacao} featured />
+          <QuickCard title="Especialistas" subtitle="Escolha o profissional" onPress={onEspecialistas} />
         </View>
 
         {ultimo && (
@@ -692,8 +708,9 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
       Animated.timing(stageOpacity, { toValue: 0, duration: 120, useNativeDriver: true }),
     ]).start(({ finished }) => {
       if (!finished) return;
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setEtapaConsulta(next);
-      stageX.setValue(direction === 1 ? 28 : -28);
+      stageX.setValue(direction === 1 ? 34 : -34);
       requestAnimationFrame(() => {
         Animated.parallel([
           Animated.timing(stageX, { toValue: 0, duration: 220, useNativeDriver: true }),
@@ -704,6 +721,12 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
   }
 
   const stageStyle = { opacity: stageOpacity, transform: [{ translateX: stageX }] };
+  const stagePan = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => etapaConsulta === 'pagamento' && g.dx > 24 && Math.abs(g.dx) > Math.abs(g.dy),
+    onPanResponderRelease: (_, g) => {
+      if (etapaConsulta === 'pagamento' && g.dx > 68) mudarEtapa('dados', -1);
+    },
+  }), [etapaConsulta]);
 
   const pacienteNomeSelecionado = para === 'outra-pessoa' ? nomeOutro.trim() : paciente.nome;
   const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
@@ -868,7 +891,7 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
     return (
       <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
-        <Animated.View style={[{ flex: 1 }, stageStyle]}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]} {...stagePan.panHandlers}>
         <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
           <PageHeader title="Pagamento" onVoltar={voltarEtapa} />
           <ConsultaProgress current="pagamento" />
@@ -1035,14 +1058,94 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 }
 
 function ConsultaProgress({ current }: { current: EtapaConsulta }) {
-  const etapas: EtapaConsulta[] = ['dados', 'pagamento', 'triagem', 'fila'];
-  const atual = etapas.indexOf(current);
+  const etapas: { key: EtapaConsulta; label: string }[] = [
+    { key: 'dados', label: 'Queixa' },
+    { key: 'pagamento', label: 'Pagamento' },
+    { key: 'triagem', label: 'Triagem' },
+    { key: 'fila', label: 'Atendimento' },
+  ];
+  const atual = etapas.findIndex((item) => item.key === current);
   return (
-    <View style={styles.consultaProgress}>
-      {etapas.map((item, index) => (
-        <View key={item} style={[styles.consultaDot, index === atual && styles.consultaDotActive, index < atual && styles.consultaDotDone]} />
-      ))}
+    <View style={styles.consultaProgressWrap}>
+      <View style={styles.consultaProgressHead}>
+        <Text style={styles.consultaProgressLabel}>{etapas[atual]?.label}</Text>
+        <Text style={styles.consultaProgressCount}>{atual + 1} de {etapas.length}</Text>
+      </View>
+      <View style={styles.consultaProgress}>
+        {etapas.map((item, index) => (
+          <View key={item.key} style={[styles.consultaSegment, index <= atual && styles.consultaSegmentActive]} />
+        ))}
+      </View>
+      {current === 'pagamento' ? <Text style={styles.consultaSwipeHint}>Deslize para a direita para voltar</Text> : null}
     </View>
+  );
+}
+
+function ServicosSaude({ onVoltar, onAbrir }: { onVoltar: () => void; onAbrir: (title: string, url: string) => void }) {
+  const motion = usePageSlide(onVoltar);
+  const servicos = [
+    { title: 'Psiquiatria', text: 'Consulta médica especializada', url: 'https://consultaja24h.com.br/especialistas/psiquiatria' },
+    { title: 'Dermatologia', text: 'Avaliação dermatológica online', url: 'https://consultaja24h.com.br/especialistas/dermatologia' },
+    { title: 'Endocrinologia', text: 'Acompanhamento endocrinológico', url: 'https://consultaja24h.com.br/especialistas/endocrinologia' },
+    { title: 'Psicologia', text: 'Psicoterapia online com horário marcado', url: 'https://consultaja24h.com.br/psicologo-online' },
+  ];
+  return (
+    <Animated.View style={motion.style}>
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.pageWrap}>
+          <PageHeader title="Especialistas" onVoltar={motion.close} />
+          <Text style={styles.pageLead}>Escolha a área e veja profissionais, valores e horários disponíveis.</Text>
+          <View style={styles.serviceList}>
+            {servicos.map((item) => (
+              <Pressable key={item.title} onPress={() => onAbrir(item.title, item.url)} style={({ pressed }) => [styles.serviceCard, pressed && styles.quickCardPressed]}>
+                <View style={styles.serviceDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.serviceTitle}>{item.title}</Text>
+                  <Text style={styles.serviceText}>{item.text}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+function InternalWebScreen({ title, url, onVoltar }: { title: string; url: string; onVoltar: () => void }) {
+  const motion = usePageSlide(onVoltar);
+  const webRef = useRef<WebView>(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [loadingWeb, setLoadingWeb] = useState(true);
+  function voltar() {
+    if (canGoBack) webRef.current?.goBack();
+    else motion.close();
+  }
+  return (
+    <Animated.View style={motion.style}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.internalWebHeader}>
+          <Pressable onPress={voltar} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
+          <Text style={styles.pageTitle} numberOfLines={1}>{title}</Text>
+          <View style={{ width: 42 }} />
+        </View>
+        <View style={styles.webWrap}>
+          {loadingWeb ? <View style={styles.webLoading}><ActivityIndicator color="#16c783" /><Text style={styles.webLoadingText}>Carregando...</Text></View> : null}
+          <WebView
+            ref={webRef}
+            source={{ uri: url }}
+            style={styles.webView}
+            startInLoadingState={false}
+            onLoadStart={() => setLoadingWeb(true)}
+            onLoadEnd={() => setLoadingWeb(false)}
+            onNavigationStateChange={(nav) => setCanGoBack(nav.canGoBack)}
+            setSupportMultipleWindows={false}
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </View>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -1071,7 +1174,7 @@ function PrimaryButton({ label, loading, onPress }: { label: string; loading: bo
 }
 
 function QuickCard({ title, subtitle, onPress, featured }: { title: string; subtitle: string; onPress: () => void; featured?: boolean }) {
-  return <Pressable onPress={onPress} style={[styles.quickCard, featured && styles.quickCardFeatured]}><Text style={[styles.quickTitle, featured && styles.quickTitleFeatured]}>{title}</Text><Text style={styles.quickSubtitle}>{subtitle}</Text><Text style={styles.quickArrow}>→</Text></Pressable>;
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.quickCard, featured && styles.quickCardFeatured, pressed && styles.quickCardPressed]}><Text style={[styles.quickTitle, featured && styles.quickTitleFeatured]}>{title}</Text><Text style={styles.quickSubtitle}>{subtitle}</Text></Pressable>;
 }
 
 function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
@@ -1208,6 +1311,7 @@ const styles = StyleSheet.create({
   quickTitleFeatured: { color: '#dfff9e' },
   quickSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   quickArrow: { color: '#16c783', fontSize: 20, marginTop: 'auto' },
+  quickCardPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 },
   sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18.5, fontWeight: '600' },
   sectionAction: { color: '#16c783', fontSize: 13, fontWeight: '700' },
@@ -1270,11 +1374,25 @@ const styles = StyleSheet.create({
 
   pageWrap: { padding: 20, paddingBottom: 50 },
   pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
-  consultaProgress: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, marginTop: -12, marginBottom: 20 },
-  consultaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themeColor('#bdcbc4', '#24332e') },
-  consultaDotDone: { backgroundColor: themeColor('#79b99c', '#356957') },
-  consultaDotActive: { width: 20, backgroundColor: '#16c783' },
+  consultaProgressWrap: { marginTop: -10, marginBottom: 20 },
+  consultaProgressHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 },
+  consultaProgressLabel: { color: themeColor('#34413d', '#dce7e2'), fontSize: 12, fontWeight: '800' },
+  consultaProgressCount: { color: themeColor('#71807a', '#75827e'), fontSize: 11, fontWeight: '700' },
+  consultaProgress: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  consultaSegment: { flex: 1, height: 4, borderRadius: 999, backgroundColor: themeColor('#cbd6d0', '#20302b') },
+  consultaSegmentActive: { backgroundColor: '#16c783' },
+  consultaSwipeHint: { color: themeColor('#71807a', '#75827e'), fontSize: 10.5, marginTop: 7, textAlign: 'right' },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  serviceList: { gap: 11 },
+  serviceCard: { minHeight: 82, borderRadius: 18, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: themeColor('#e9f0ec', '#0d1916') },
+  serviceDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16c783' },
+  serviceTitle: { color: themeColor('#14201d', '#fff'), fontSize: 17, fontWeight: '800' },
+  serviceText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12.5, marginTop: 4 },
+  internalWebHeader: { height: 62, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  webWrap: { flex: 1, overflow: 'hidden', backgroundColor: themeColor('#e8efeb', '#07100f') },
+  webView: { flex: 1, backgroundColor: 'transparent' },
+  webLoading: { position: 'absolute', zIndex: 5, left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  webLoadingText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12 },
   backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: themeColor('#dce7e1', '#0b1715'), alignItems: 'center', justifyContent: 'center' },
   backText: { color: themeColor('#14201d', '#fff'), fontSize: 30, lineHeight: 32, marginTop: -3 },
   pageTitle: { color: themeColor('#14201d', '#fff'), fontSize: 20, fontWeight: '800' },
