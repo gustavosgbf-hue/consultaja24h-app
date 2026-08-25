@@ -53,6 +53,7 @@ import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } f
 
 const URL_RENOVACAO = 'https://consultaja24h.com.br/renovacao-de-receita';
 const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
+const SUPPORT_WHATSAPP = '5598989272727';
 
 const PERGUNTA_DOCUMENTO = 'Você precisa de atestado, receita, declaração ou outro documento nesta consulta?';
 const BETA_TEST_PHONE = '98991344646';
@@ -178,6 +179,11 @@ async function abrirLink(url: string) {
   } catch {
     Alert.alert('Não foi possível abrir', 'Tente novamente em instantes.');
   }
+}
+
+async function abrirSuporte() {
+  const mensagem = encodeURIComponent('Olá, preciso de ajuda com o ConsultaJá24h.');
+  await abrirLink(`https://wa.me/${SUPPORT_WHATSAPP}?text=${mensagem}`);
 }
 
 function usePageSlide(onClose: () => void) {
@@ -863,6 +869,21 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <InfoRow label="CPF" value={mascararCpf(paciente.cpf)} />
           <InfoRow label="E-mail" value={mascararEmail(paciente.email)} last />
         </View>
+
+        <Pressable onPress={abrirSuporte} style={({ pressed }) => [styles.supportButton, pressed && { opacity: 0.82 }]} accessibilityRole="button" accessibilityLabel="Falar com o suporte">
+          <View style={styles.supportIcon}>
+            <View style={styles.supportBubble}>
+              <View style={styles.supportBubbleDot} />
+              <View style={styles.supportBubbleDot} />
+              <View style={styles.supportBubbleDot} />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportTitle}>Suporte</Text>
+            <Text style={styles.supportText}>Fale com a equipe da ConsultaJá24h</Text>
+          </View>
+          <Text style={styles.supportArrow}>›</Text>
+        </Pressable>
 
         <View style={styles.profileNotice}>
           <Text style={styles.profileNoticeTitle}>Privacidade</Text>
@@ -1697,6 +1718,13 @@ const styles = StyleSheet.create({
   infoRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f') },
   infoLabel: { color: themeColor('#66736e', '#71807b'), fontSize: 11, fontWeight: '800', letterSpacing: .6, textTransform: 'uppercase' },
   infoValue: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '700', marginTop: 5 },
+  supportButton: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 66, borderRadius: 18, paddingHorizontal: 15, marginTop: 14, backgroundColor: themeColor('#e9f0ec', '#0d1916') },
+  supportIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dcebe3', '#123027') },
+  supportBubble: { width: 19, height: 15, borderWidth: 1.6, borderColor: themeColor('#0b8f61', '#78f25f'), borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2.2 },
+  supportBubbleDot: { width: 2.5, height: 2.5, borderRadius: 2, backgroundColor: themeColor('#0b8f61', '#78f25f') },
+  supportTitle: { color: themeColor('#14201d', '#eef5f1'), fontSize: 14.5, fontWeight: '800' },
+  supportText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 11.5, marginTop: 3 },
+  supportArrow: { color: themeColor('#7b8b84', '#6f8179'), fontSize: 24, marginTop: -1 },
   profileNotice: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 16, padding: 16, marginTop: 14 },
   profileNoticeTitle: { color: themeColor('#0b8f61', '#78f25f'), fontWeight: '800', fontSize: 13 },
   profileNoticeText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 19, fontSize: 12.5, marginTop: 6 },
@@ -1716,10 +1744,10 @@ const styles = StyleSheet.create({
   identityCard: { backgroundColor: '#f7fbf8', borderRadius: 17, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 14 },
   identityKicker: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   identityName: { color: '#14201d', fontSize: 16.5, fontWeight: '800', marginTop: 5 },
-  identityMeta: { color: '#66736e', fontSize: 12.5, marginTop: 4 },
-  formCard: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, padding: 16, marginBottom: 22 },
-  inputLabelDark: { color: '#d6dfdb', fontSize: 12.5, fontWeight: '700', marginBottom: 7 },
-  darkInput: { backgroundColor: themeColor('#dfe8e3', '#101d1a'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
+  identityMeta: { color: themeColor('#52615c', '#81908a'), fontSize: 12.5, fontWeight: '500', marginTop: 5 },
+  formCard: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 18 },
+  inputLabelDark: { color: themeColor('#34413d', '#d6dfdb'), fontSize: 12.5, fontWeight: '700', marginBottom: 6 },
+  darkInput: { backgroundColor: themeColor('#dfe8e3', '#101d1a'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 11, color: themeColor('#14201d', '#fff'), fontSize: 15 },
   formSectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 16.5, fontWeight: '800', marginBottom: 8 },
   textArea: { minHeight: 92, paddingTop: 12 },
   counter: { color: '#64736e', fontSize: 10.5, textAlign: 'right', marginTop: -8, marginBottom: 10 },
