@@ -443,7 +443,7 @@ export default function App() {
   }
 
   if (tela === 'web' && webPage) {
-    return <InternalWebScreen title={webPage.title} url={webPage.url} onVoltar={() => { setWebPage(null); setTela(webPage.title === 'Renovar receita' ? 'home' : 'servicos'); }} />;
+    return <InternalWebScreen title={webPage.title} url={webPage.url} onVoltar={() => { const voltarHome = webPage.title === 'Renovar receita' || webPage.title === 'Psicologia'; setWebPage(null); setTela(voltarHome ? 'home' : 'servicos'); }} />;
   }
 
   if (tela === 'historico-chat' && historicoSelecionado) {
@@ -472,12 +472,13 @@ export default function App() {
       onDocumentos={() => setTela('documentos')}
       onRenovacao={() => { setWebPage({ title: 'Renovar receita', url: URL_RENOVACAO }); setTela('web'); }}
       onEspecialistas={() => setTela('servicos')}
+      onPsicologia={() => { setWebPage({ title: 'Psicologia', url: 'https://consultaja24h.com.br/psicologo-online' }); setTela('web'); }}
       onAbrirAtendimento={(item) => { setHistoricoOrigem('home'); setHistoricoSelecionado(item); setTela('historico-chat'); }}
     />
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onAbrirAtendimento }: {
+function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
@@ -491,6 +492,7 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
   onDocumentos: () => void;
   onRenovacao: () => void;
   onEspecialistas: () => void;
+  onPsicologia: () => void;
   onAbrirAtendimento: (item: AtendimentoHistorico) => void;
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
@@ -543,6 +545,13 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
           <QuickCard title="Renovar receita" subtitle="Solicite pelo app" onPress={onRenovacao} featured />
           <QuickCard title="Especialistas" subtitle="Escolha o profissional" onPress={onEspecialistas} />
         </View>
+        <Pressable onPress={onPsicologia} style={({ pressed }) => [styles.psychologyHomeCard, pressed && styles.quickCardPressed]}>
+          <View style={styles.psychologyHomeBadge}><Text style={styles.psychologyHomeBadgeText}>PSI</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.psychologyHomeTitle}>Psicologia</Text>
+            <Text style={styles.psychologyHomeText}>Psicoterapia online com horário marcado</Text>
+          </View>
+        </Pressable>
 
         {ultimo && (
           <>
@@ -1000,59 +1009,70 @@ function NovaConsulta({ paciente, onVoltar }: { paciente: Paciente; onVoltar: ()
 
   return (
     <Animated.View style={motion.style}>
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.pageWrap} keyboardShouldPersistTaps="handled">
-        <PageHeader title="Nova consulta" onVoltar={voltarEtapa} />
-        <ConsultaProgress current="dados" />
-        <Animated.View style={stageStyle}>
-        <Text style={styles.pageLead}>Vamos começar identificando quem será atendido.</Text>
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Animated.View style={[{ flex: 1 }, stageStyle]}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.consultDataScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <PageHeader title="Nova consulta" onVoltar={voltarEtapa} />
+              <ConsultaProgress current="dados" />
+              <Text style={styles.consultIntro}>Quem será atendido?</Text>
 
-        <View style={styles.choiceRow}>
-          <ChoiceCard active={para === 'mim'} title="Para mim" subtitle={paciente.nome?.split(' ')[0] || 'Paciente'} onPress={() => setPara('mim')} />
-          <ChoiceCard active={para === 'outra-pessoa'} title="Outra pessoa" subtitle="Filho, familiar etc." onPress={() => setPara('outra-pessoa')} />
-        </View>
+              <View style={styles.choiceRow}>
+                <ChoiceCard active={para === 'mim'} title="Para mim" subtitle={paciente.nome?.split(' ')[0] || 'Paciente'} onPress={() => setPara('mim')} />
+                <ChoiceCard active={para === 'outra-pessoa'} title="Outra pessoa" subtitle="Filho ou familiar" onPress={() => setPara('outra-pessoa')} />
+              </View>
 
-        {para === 'mim' ? (
-          <View style={styles.identityCard}>
-            <Text style={styles.identityKicker}>PACIENTE</Text>
-            <Text style={styles.identityName}>{paciente.nome}</Text>
-            <Text style={styles.identityMeta}>{mascararCpf(paciente.cpf)} · {mascararTelefone(paciente.tel)}</Text>
-          </View>
-        ) : (
-          <View style={styles.formCard}>
-            <Text style={styles.inputLabelDark}>Nome completo do paciente</Text>
-            <TextInput value={nomeOutro} onChangeText={setNomeOutro} placeholder="Nome e sobrenome" placeholderTextColor="#66736e" style={styles.darkInput} autoCapitalize="words" />
-            <Text style={styles.inputLabelDark}>CPF</Text>
-            <TextInput value={cpfOutro} onChangeText={(v) => setCpfOutro(formatarCpf(v))} placeholder="000.000.000-00" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="number-pad" maxLength={14} />
-            <Text style={styles.inputLabelDark}>Data de nascimento</Text>
-            <TextInput value={nascimentoOutro} onChangeText={setNascimentoOutro} placeholder="DD/MM/AAAA" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="numbers-and-punctuation" maxLength={10} />
-          </View>
-        )}
+              {para === 'mim' ? (
+                <View style={styles.identityCard}>
+                  <Text style={styles.identityKicker}>PACIENTE</Text>
+                  <Text style={styles.identityName}>{paciente.nome}</Text>
+                  <Text style={styles.identityMeta}>{mascararCpf(paciente.cpf)} · {mascararTelefone(paciente.tel)}</Text>
+                </View>
+              ) : (
+                <View style={styles.formCard}>
+                  <Text style={styles.inputLabelDark}>Nome completo do paciente</Text>
+                  <TextInput value={nomeOutro} onChangeText={setNomeOutro} placeholder="Nome e sobrenome" placeholderTextColor="#66736e" style={styles.darkInput} autoCapitalize="words" />
+                  <Text style={styles.inputLabelDark}>CPF</Text>
+                  <TextInput value={cpfOutro} onChangeText={(v) => setCpfOutro(formatarCpf(v))} placeholder="000.000.000-00" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="number-pad" maxLength={14} />
+                  <Text style={styles.inputLabelDark}>Data de nascimento</Text>
+                  <TextInput value={nascimentoOutro} onChangeText={setNascimentoOutro} placeholder="DD/MM/AAAA" placeholderTextColor="#66736e" style={styles.darkInput} keyboardType="numbers-and-punctuation" maxLength={10} />
+                </View>
+              )}
 
-        <Text style={styles.formSectionTitle}>O que está acontecendo?</Text>
-        <TextInput
-          value={queixa}
-          onChangeText={setQueixa}
-          placeholder="Ex.: dor de garganta, febre desde ontem, dor abdominal..."
-          placeholderTextColor="#66736e"
-          style={[styles.darkInput, styles.textArea]}
-          multiline
-          textAlignVertical="top"
-          maxLength={1200}
-        />
-        <Text style={styles.counter}>{queixa.length}/1200</Text>
+              <Text style={styles.formSectionTitle}>O que está acontecendo?</Text>
+              <TextInput
+                value={queixa}
+                onChangeText={setQueixa}
+                placeholder="Ex.: dor de garganta, febre desde ontem..."
+                placeholderTextColor="#66736e"
+                style={[styles.darkInput, styles.textArea]}
+                multiline
+                textAlignVertical="top"
+                maxLength={1200}
+              />
+              <Text style={styles.counter}>{queixa.length}/1200</Text>
 
-        <View style={styles.flowPreview}>
-          <Text style={styles.flowPreviewTitle}>Como vai funcionar</Text>
-          <FlowRow number="1" title="Pagamento" text="Finalize por PIX ou cartão." />
-          <FlowRow number="2" title="Triagem rápida" text="Perguntas objetivas depois da confirmação do pagamento." />
-          <FlowRow number="3" title="Chat com o médico" text="Atendimento por mensagem pelo próprio app." last />
-        </View>
+              <View style={styles.flowPreview}>
+                <Text style={styles.flowPreviewTitle}>Como funciona</Text>
+                <View style={styles.flowCompact}>
+                  <FlowChip number="1" title="Pagamento" />
+                  <FlowChip number="2" title="Triagem" />
+                  <FlowChip number="3" title="Chat" />
+                </View>
+              </View>
+            </ScrollView>
 
-        <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta} onPress={irParaPagamento} />
-        </Animated.View>
-      </ScrollView>
-    </SafeAreaView>
+            <View style={styles.stickyCta}>
+              <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta} onPress={irParaPagamento} />
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Animated.View>
   );
 }
@@ -1084,25 +1104,26 @@ function ConsultaProgress({ current }: { current: EtapaConsulta }) {
 function ServicosSaude({ onVoltar, onAbrir }: { onVoltar: () => void; onAbrir: (title: string, url: string) => void }) {
   const motion = usePageSlide(onVoltar);
   const servicos = [
-    { title: 'Psiquiatria', text: 'Consulta médica especializada', url: 'https://consultaja24h.com.br/especialistas/psiquiatria' },
-    { title: 'Dermatologia', text: 'Avaliação dermatológica online', url: 'https://consultaja24h.com.br/especialistas/dermatologia' },
-    { title: 'Endocrinologia', text: 'Acompanhamento endocrinológico', url: 'https://consultaja24h.com.br/especialistas/endocrinologia' },
-    { title: 'Psicologia', text: 'Psicoterapia online com horário marcado', url: 'https://consultaja24h.com.br/psicologo-online' },
+    { title: 'Psiquiatria', text: 'Saúde mental e acompanhamento médico', code: '01', url: 'https://consultaja24h.com.br/especialistas/psiquiatria' },
+    { title: 'Dermatologia', text: 'Avaliação de pele, cabelos e unhas', code: '02', url: 'https://consultaja24h.com.br/especialistas/dermatologia' },
+    { title: 'Endocrinologia', text: 'Hormônios, metabolismo e acompanhamento', code: '03', url: 'https://consultaja24h.com.br/especialistas/endocrinologia' },
   ];
   return (
     <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.pageWrap}>
           <PageHeader title="Especialistas" onVoltar={motion.close} />
-          <Text style={styles.pageLead}>Escolha a área e veja profissionais, valores e horários disponíveis.</Text>
+          <Text style={styles.pageLead}>Escolha a especialidade para ver profissionais, valores e horários.</Text>
           <View style={styles.serviceList}>
             {servicos.map((item) => (
               <Pressable key={item.title} onPress={() => onAbrir(item.title, item.url)} style={({ pressed }) => [styles.serviceCard, pressed && styles.quickCardPressed]}>
-                <View style={styles.serviceDot} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.serviceTitle}>{item.title}</Text>
-                  <Text style={styles.serviceText}>{item.text}</Text>
+                <View style={styles.serviceCardTop}>
+                  <Text style={styles.serviceCode}>{item.code}</Text>
+                  <View style={styles.serviceStatus}><View style={styles.serviceStatusDot} /><Text style={styles.serviceStatusText}>ONLINE</Text></View>
                 </View>
+                <Text style={styles.serviceTitle}>{item.title}</Text>
+                <Text style={styles.serviceText}>{item.text}</Text>
+                <Text style={styles.serviceAction}>Ver profissionais</Text>
               </Pressable>
             ))}
           </View>
@@ -1159,6 +1180,10 @@ function ChoiceCard({ active, title, subtitle, onPress }: { active: boolean; tit
 
 function FlowRow({ number, title, text, last }: { number: string; title: string; text: string; last?: boolean }) {
   return <View style={[styles.flowRow, last && { borderBottomWidth: 0, paddingBottom: 0 }]}><View style={styles.flowNumber}><Text style={styles.flowNumberText}>{number}</Text></View><View style={{ flex: 1 }}><Text style={styles.flowTitle}>{title}</Text><Text style={styles.flowText}>{text}</Text></View></View>;
+}
+
+function FlowChip({ number, title }: { number: string; title: string }) {
+  return <View style={styles.flowChip}><View style={styles.flowChipNumber}><Text style={styles.flowChipNumberText}>{number}</Text></View><Text style={styles.flowChipTitle}>{title}</Text></View>;
 }
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -1304,7 +1329,7 @@ const styles = StyleSheet.create({
   activeCareTitle: { color: themeColor('#14201d', '#f3f8f5'), fontSize: 19, fontWeight: '600', marginTop: 9 },
   activeCareText: { color: themeColor('#596763', '#9fb0a9'), fontSize: 13, lineHeight: 19, marginTop: 5 },
   activeCareAction: { color: '#16c783', fontSize: 12.5, fontWeight: '600', marginTop: 11 },
-  quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 28 },
+  quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   quickCard: { flex: 1, minHeight: 116, borderRadius: 18, backgroundColor: themeColor('#f0f5f2', '#0c1816'), padding: 15 },
   quickCardFeatured: { borderColor: '#346342', backgroundColor: '#101d14' },
   quickTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '700' },
@@ -1312,6 +1337,11 @@ const styles = StyleSheet.create({
   quickSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
   quickArrow: { color: '#16c783', fontSize: 20, marginTop: 'auto' },
   quickCardPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
+  psychologyHomeCard: { minHeight: 76, borderRadius: 18, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 28, flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: themeColor('#e9eef6', '#101921') },
+  psychologyHomeBadge: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dbe6f5', '#172536') },
+  psychologyHomeBadgeText: { color: themeColor('#315b93', '#8ab9f5'), fontSize: 10, fontWeight: '900', letterSpacing: .8 },
+  psychologyHomeTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15.5, fontWeight: '800' },
+  psychologyHomeText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12, marginTop: 3 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 },
   sectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18.5, fontWeight: '600' },
   sectionAction: { color: '#16c783', fontSize: 13, fontWeight: '700' },
@@ -1383,11 +1413,16 @@ const styles = StyleSheet.create({
   consultaSegmentActive: { backgroundColor: '#16c783' },
   consultaSwipeHint: { color: themeColor('#71807a', '#75827e'), fontSize: 10.5, marginTop: 7, textAlign: 'right' },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-  serviceList: { gap: 11 },
-  serviceCard: { minHeight: 82, borderRadius: 18, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: themeColor('#e9f0ec', '#0d1916') },
-  serviceDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16c783' },
-  serviceTitle: { color: themeColor('#14201d', '#fff'), fontSize: 17, fontWeight: '800' },
-  serviceText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12.5, marginTop: 4 },
+  serviceList: { gap: 12 },
+  serviceCard: { minHeight: 148, borderRadius: 22, padding: 18, backgroundColor: themeColor('#eef3f0', '#0d1916') },
+  serviceCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
+  serviceCode: { color: themeColor('#9aa8a1', '#53635d'), fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  serviceStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, backgroundColor: themeColor('#dff2e8', '#10271f') },
+  serviceStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783' },
+  serviceStatusText: { color: themeColor('#18724f', '#78f25f'), fontSize: 9, fontWeight: '900', letterSpacing: .8 },
+  serviceTitle: { color: themeColor('#14201d', '#fff'), fontSize: 21, fontWeight: '800', letterSpacing: -.3 },
+  serviceText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12.5, lineHeight: 18, marginTop: 5 },
+  serviceAction: { color: '#16c783', fontSize: 12, fontWeight: '800', marginTop: 16 },
   internalWebHeader: { height: 62, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   webWrap: { flex: 1, overflow: 'hidden', backgroundColor: themeColor('#e8efeb', '#07100f') },
   webView: { flex: 1, backgroundColor: 'transparent' },
@@ -1412,27 +1447,35 @@ const styles = StyleSheet.create({
   logoutButton: { borderWidth: 1, borderColor: '#603438', backgroundColor: '#1a1112', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
   logoutButtonText: { color: '#ff9ca5', fontSize: 14, fontWeight: '800' },
 
-  choiceRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  choiceCard: { flex: 1, minHeight: 120, borderRadius: 18, backgroundColor: themeColor('#e9f0ec', '#0b1715'), padding: 15 },
+  consultDataScroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14 },
+  consultIntro: { color: themeColor('#5f6c67', '#a9b5b0'), fontSize: 13, marginTop: -5, marginBottom: 10 },
+  choiceRow: { flexDirection: 'row', gap: 10, marginBottom: 11 },
+  choiceCard: { flex: 1, minHeight: 94, borderRadius: 17, backgroundColor: themeColor('#e9f0ec', '#0b1715'), padding: 13 },
   choiceCardActive: { backgroundColor: themeColor('#dcebe3', '#0f211c') },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#50605a', alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
+  radio: { width: 19, height: 19, borderRadius: 10, borderWidth: 1.5, borderColor: '#50605a', alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
   radioActive: { borderColor: '#16c783' },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16c783' },
   choiceTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800' },
   choiceSubtitle: { color: themeColor('#66736e', '#84908c'), fontSize: 12, lineHeight: 17, marginTop: 5 },
-  identityCard: { backgroundColor: '#f7fbf8', borderRadius: 18, padding: 17, marginBottom: 22 },
+  identityCard: { backgroundColor: '#f7fbf8', borderRadius: 17, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 14 },
   identityKicker: { color: '#18724f', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  identityName: { color: '#14201d', fontSize: 18, fontWeight: '800', marginTop: 8 },
+  identityName: { color: '#14201d', fontSize: 16.5, fontWeight: '800', marginTop: 5 },
   identityMeta: { color: '#66736e', fontSize: 12.5, marginTop: 4 },
   formCard: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, padding: 16, marginBottom: 22 },
   inputLabelDark: { color: '#d6dfdb', fontSize: 12.5, fontWeight: '700', marginBottom: 7 },
   darkInput: { backgroundColor: themeColor('#dfe8e3', '#101d1a'), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
-  formSectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 18, fontWeight: '800', marginBottom: 10 },
-  textArea: { minHeight: 128, paddingTop: 14 },
-  counter: { color: '#64736e', fontSize: 11, textAlign: 'right', marginTop: -7, marginBottom: 20 },
-  flowPreview: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 18, padding: 16, marginBottom: 17 },
-  flowPreviewTitle: { color: themeColor('#14201d', '#fff'), fontSize: 15, fontWeight: '800', marginBottom: 5 },
-  flowRow: { flexDirection: 'row', gap: 12, borderBottomWidth: 1, borderBottomColor: themeColor('#dce6e1', '#1d342f'), paddingVertical: 13 },
+  formSectionTitle: { color: themeColor('#14201d', '#fff'), fontSize: 16.5, fontWeight: '800', marginBottom: 8 },
+  textArea: { minHeight: 92, paddingTop: 12 },
+  counter: { color: '#64736e', fontSize: 10.5, textAlign: 'right', marginTop: -8, marginBottom: 10 },
+  flowPreview: { backgroundColor: themeColor('#e9f0ec', '#0b1715'), borderRadius: 17, padding: 13, marginBottom: 4 },
+  flowPreviewTitle: { color: themeColor('#14201d', '#fff'), fontSize: 13.5, fontWeight: '800', marginBottom: 10 },
+  flowCompact: { flexDirection: 'row', gap: 8 },
+  flowChip: { flex: 1, minHeight: 58, borderRadius: 13, paddingHorizontal: 9, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dfe9e3', '#12201c') },
+  flowChipNumber: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ccebdc', '#173329') },
+  flowChipNumberText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10, fontWeight: '900' },
+  flowChipTitle: { color: themeColor('#34413d', '#e9f2ee'), fontSize: 10.5, fontWeight: '800', marginTop: 5, textAlign: 'center' },
+  stickyCta: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  flowRow: { flexDirection: 'row', gap: 12, paddingVertical: 10 },
   flowNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: themeColor('#e7f7ee', '#123027'), alignItems: 'center', justifyContent: 'center' },
   flowNumberText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 12, fontWeight: '900' },
   flowTitle: { color: themeColor('#14201d', '#fff'), fontSize: 13.5, fontWeight: '800' },
