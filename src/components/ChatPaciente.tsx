@@ -21,15 +21,8 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  AudioModule,
-  getRecordingPermissionsAsync,
-  requestRecordingPermissionsAsync,
-  RecordingPresets,
-  setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
-  useAudioRecorder,
-  useAudioRecorderState,
 } from 'expo-audio';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
@@ -255,8 +248,6 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   const attachmentAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView | null>(null);
   const inputRef = useRef<TextInput | null>(null);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 250);
 
   useEffect(() => {
     let ativo = true;
@@ -412,36 +403,6 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     }, asset.size);
   }
 
-  async function iniciarAudio() {
-    setMenuAnexo(false);
-    try {
-      const currentPermission = await getRecordingPermissionsAsync();
-      const permission = currentPermission.granted ? currentPermission : await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Microfone bloqueado', 'Autorize o acesso ao microfone nos Ajustes do iPhone para enviar áudio.');
-        return;
-      }
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setErro('');
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Não foi possível iniciar a gravação.');
-    }
-  }
-
-  async function finalizarAudio(enviarGravacao: boolean) {
-    try {
-      await recorder.stop();
-      const uri = recorder.uri;
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-      if (!enviarGravacao || !uri) return;
-      await enviarArquivo({ uri, name: `Audio_${Date.now()}.m4a`, type: 'audio/mp4' });
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Não foi possível finalizar o áudio.');
-    }
-  }
-
   function abrirArquivo(mensagem: MensagemChatV2) {
     const url = String(mensagem.arquivo_url || '').trim();
     if (!/^https:\/\//i.test(url)) {
@@ -535,43 +496,32 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
               </View>
             ) : null}
 
-            {recorderState.isRecording ? (
-              <View style={styles.recordingBar}>
-                <Pressable onPress={() => finalizarAudio(false)} style={styles.recordCancel} accessibilityLabel="Cancelar áudio"><CloseIcon color="#a9b5b0" /></Pressable>
-                <View style={styles.recordDot} />
-                <Text style={styles.recordingText}>Gravando {formatDuration(recorderState.durationMillis / 1000)}</Text>
-                <Pressable onPress={() => finalizarAudio(true)} style={styles.recordSend} accessibilityLabel="Enviar áudio"><SendIcon /></Pressable>
-              </View>
-            ) : (
-              <View style={styles.composer}>
-                <Pressable onPress={() => setMenuAnexo((v) => !v)} style={styles.iconButton} accessibilityLabel="Anexar"><ClipIcon /></Pressable>
-                <TextInput
-                  ref={inputRef}
-                  value={texto}
-                  onChangeText={setTexto}
-                  onFocus={() => setMenuAnexo(false)}
-                  placeholder="Escreva uma mensagem..."
-                  placeholderTextColor="#6f7d78"
-                  style={styles.input}
-                  multiline
-                  maxLength={3000}
-                  editable={!enviando}
-                  returnKeyType="send"
-                  submitBehavior="submit"
-                  onSubmitEditing={enviar}
-                />
-                {texto.trim() ? (
-                  <Pressable onPress={enviar} disabled={enviando} style={[styles.send, enviando && styles.sendDisabled]} accessibilityLabel="Enviar mensagem">{enviando ? <ActivityIndicator color="#07100f" size="small" /> : <SendIcon />}</Pressable>
-                ) : (
-                  <Pressable onPress={iniciarAudio} disabled={enviando} style={styles.iconButton} accessibilityLabel="Gravar áudio"><MicIcon /></Pressable>
-                )}
-              </View>
-            )}
+            <View style={styles.composer}>
+              <Pressable onPress={() => setMenuAnexo((v) => !v)} style={styles.iconButton} accessibilityLabel="Anexar"><ClipIcon /></Pressable>
+              <TextInput
+                ref={inputRef}
+                value={texto}
+                onChangeText={setTexto}
+                onFocus={() => setMenuAnexo(false)}
+                placeholder="Escreva uma mensagem..."
+                placeholderTextColor="#6f7d78"
+                style={styles.input}
+                multiline
+                maxLength={3000}
+                editable={!enviando}
+                returnKeyType="send"
+                submitBehavior="submit"
+                onSubmitEditing={enviar}
+              />
+              {texto.trim() ? (
+                <Pressable onPress={enviar} disabled={enviando} style={[styles.send, enviando && styles.sendDisabled]} accessibilityLabel="Enviar mensagem">{enviando ? <ActivityIndicator color="#07100f" size="small" /> : <SendIcon />}</Pressable>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </KeyboardAvoidingView>
 
-      {menuAnexoRenderizado && !recorderState.isRecording ? (
+      {menuAnexoRenderizado ? (
         <View style={styles.attachmentOverlay}>
           <Pressable style={styles.attachmentBackdrop} onPress={() => setMenuAnexo(false)} accessibilityLabel="Fechar menu de anexos" />
           <Animated.View
