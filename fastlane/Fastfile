@@ -1,0 +1,42 @@
+default_platform(:ios)
+
+platform :ios do
+  def asc_key
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_P8"),
+      is_key_content_base64: false
+    )
+  end
+
+  lane :sync_metadata do
+    deliver(
+      api_key: asc_key,
+      app_identifier: "com.consultaja24h.app",
+      app_version: "1.0.1",
+      metadata_path: "fastlane/metadata",
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      submit_for_review: false,
+      force: true
+    )
+  end
+
+  lane :submit_review do
+    deliver(
+      api_key: asc_key,
+      app_identifier: "com.consultaja24h.app",
+      app_version: "1.0.1",
+      build_number: "6",
+      metadata_path: "fastlane/metadata",
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      submit_for_review: true,
+      force: true,
+      submission_information: {
+        export_compliance_uses_encryption: false
+      }
+    )
+  end
+end
