@@ -12,7 +12,7 @@ if (!src.includes("const SUPPORT_WHATSAPP = '5598989272727';")) {
 
 if (!src.includes('async function abrirSuporte()')) {
   const anchor = `async function abrirLink(url: string) {\n  try {\n    await Linking.openURL(url);\n  } catch {\n    Alert.alert('Não foi possível abrir', 'Tente novamente em instantes.');\n  }\n}`;
-  const replacement = `${anchor}\n\nasync function abrirSuporte() {\n  const mensagem = encodeURIComponent('Olá, preciso de ajuda com o ConsultaJá24h.');\n  await abrirLink(\`https://wa.me/\${SUPPORT_WHATSAPP}?text=\${mensagem}\`);\n}`;
+  const replacement = `${anchor}\n\nasync function abrirSuporte() {\n  const mensagem = encodeURIComponent('Olá, preciso de ajuda com meu atendimento.');\n  await abrirLink(\`https://wa.me/\${SUPPORT_WHATSAPP}?text=\${mensagem}\`);\n}`;
   if (!src.includes(anchor)) throw new Error('Âncora abrirLink não encontrada');
   src = src.replace(anchor, replacement);
 }
@@ -33,3 +33,5 @@ if (!src.includes('supportButton: {')) {
 
 fs.writeFileSync(path, src);
 console.log('Support entry applied');
+
+await import('./apply-final-active-consultation-flow.mjs');
