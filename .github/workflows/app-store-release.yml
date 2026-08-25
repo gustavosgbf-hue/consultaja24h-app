@@ -1,0 +1,47 @@
+name: App Store Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Ação na App Store
+        required: true
+        type: choice
+        options:
+          - sync_metadata
+          - submit_review
+        default: sync_metadata
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate App Store credentials
+        run: |
+          test -n "$ASC_KEY_ID" || { echo "Missing ASC_KEY_ID"; exit 1; }
+          test -n "$ASC_ISSUER_ID" || { echo "Missing ASC_ISSUER_ID"; exit 1; }
+          test -n "$ASC_KEY_P8" || { echo "Missing ASC_KEY_P8"; exit 1; }
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Sync App Store metadata
+        if: ${{ inputs.action == 'sync_metadata' }}
+        run: bundle exec fastlane ios sync_metadata
+
+      - name: Submit build 6 for App Review
+        if: ${{ inputs.action == 'submit_review' }}
+        run: bundle exec fastlane ios submit_review
