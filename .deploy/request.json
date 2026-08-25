@@ -1,5 +1,5 @@
 {
-  "action": "ota",
-  "message": "Compact personal data card and improve CPF legibility",
-  "requested_at": "2026-08-25T04:22:30-03:00"
+  "action": "finalize_release",
+  "message": "Add discreet support entry with WhatsApp Business contact",
+  "requested_at": "2026-08-25T04:50:00-03:00"
 }
