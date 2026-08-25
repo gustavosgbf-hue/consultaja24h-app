@@ -1,5 +1,5 @@
 {
-  "action": "ios_build",
-  "message": "Final iOS production build",
-  "requested_at": "2026-08-25T05:48:00-03:00"
+  "action": "submit_testflight",
+  "message": "Submit final iOS build 6",
+  "requested_at": "2026-08-25T05:59:00-03:00"
 }
