@@ -28,10 +28,13 @@ import {
   carregarHistoricoPaciente,
   carregarDocumentosPaciente,
   carregarPaciente,
+  carregarRenovacoesPaciente,
+  carregarRenovacaoPaciente,
   conversarTriagem,
   iniciarAtendimentoBeta,
   solicitarOtpPaciente,
   verificarOtpPaciente,
+  type RenovacaoPaciente,
   type TriageMessage,
 } from './src/api/client';
 import {
@@ -43,6 +46,7 @@ import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
 import ThemeToggle from './src/components/ThemeToggle';
 import DocumentViewer from './src/components/DocumentViewer';
+import { setPushNavigationHandler } from './src/navigation/pushNavigation';
 import { WebView } from 'react-native-webview';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
@@ -62,7 +66,7 @@ Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda 
 Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
 Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
-type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web';
+type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
 type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
 
@@ -196,6 +200,8 @@ export default function App() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [historico, setHistorico] = useState<AtendimentoHistorico[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoPaciente[]>([]);
+  const [renovacoes, setRenovacoes] = useState<RenovacaoPaciente[]>([]);
+  const [renovacaoSelecionada, setRenovacaoSelecionada] = useState<RenovacaoPaciente | null>(null);
   const [historicoSelecionado, setHistoricoSelecionado] = useState<AtendimentoHistorico | null>(null);
   const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
@@ -203,6 +209,21 @@ export default function App() {
 
   useEffect(() => {
     restaurarSessao();
+  }, []);
+
+  useEffect(() => {
+    setPushNavigationHandler((action) => {
+      if (action.kind !== 'renovacao') return;
+      setTela('renovacao');
+      setRenovacaoSelecionada(null);
+      carregarRenovacaoPaciente(action.atendimentoId)
+        .then((data) => setRenovacaoSelecionada(data.renovacao))
+        .catch(() => {
+          setTela('home');
+          Alert.alert('Renovação', 'Não foi possível abrir esta renovação agora.');
+        });
+    });
+    return () => setPushNavigationHandler(null);
   }, []);
 
   async function restaurarSessao() {
@@ -220,16 +241,18 @@ export default function App() {
   async function carregarHome() {
     setHomeLoading(true);
     try {
-      const [me, agenda, history, docs] = await Promise.all([
+      const [me, agenda, history, docs, renewalData] = await Promise.all([
         carregarPaciente(),
         carregarAgendamentos(),
         carregarHistoricoPaciente().catch(() => ({ ok: true, atendimentos: [] })),
         carregarDocumentosPaciente().catch(() => ({ ok: true, documentos: [] })),
+        carregarRenovacoesPaciente().catch(() => ({ ok: true, renovacoes: [] })),
       ]);
       setPaciente(me.paciente);
       setAgendamentos(agenda.agendamentos || []);
       setHistorico(history.atendimentos || []);
       setDocumentos(docs.documentos || []);
+      setRenovacoes(renewalData.renovacoes || []);
     } finally {
       setHomeLoading(false);
     }
@@ -348,6 +371,8 @@ export default function App() {
     setAgendamentos([]);
     setHistorico([]);
     setDocumentos([]);
+    setRenovacoes([]);
+    setRenovacaoSelecionada(null);
     setHistoricoSelecionado(null);
     setTela('home');
     setTelefone('');
@@ -438,12 +463,16 @@ export default function App() {
     }} />;
   }
 
+  if (tela === 'renovacao') {
+    return <RenovacaoAcompanhamento renovacao={renovacaoSelecionada} onVoltar={() => { setRenovacaoSelecionada(null); setTela('home'); carregarHome(); }} onAtualizar={async () => { if (!renovacaoSelecionada?.id) return; const data = await carregarRenovacaoPaciente(renovacaoSelecionada.id); setRenovacaoSelecionada(data.renovacao); await carregarHome(); }} />;
+  }
+
   if (tela === 'servicos') {
     return <ServicosSaude onVoltar={() => setTela('home')} onAbrir={(title, url) => { setWebPage({ title, url }); setTela('web'); }} />;
   }
 
   if (tela === 'web' && webPage) {
-    return <InternalWebScreen title={webPage.title} url={webPage.url} onVoltar={() => { const voltarHome = webPage.title === 'Renovar receita' || webPage.title === 'Psicologia'; setWebPage(null); setTela(voltarHome ? 'home' : 'servicos'); }} />;
+    return <InternalWebScreen title={webPage.title} url={webPage.url} onVoltar={() => { const voltarHome = webPage.title === 'Renovar receita' || webPage.title === 'Psicologia'; const eraRenovacao = webPage.title === 'Renovar receita'; setWebPage(null); setTela(voltarHome ? 'home' : 'servicos'); if (eraRenovacao) carregarHome(); }} />;
   }
 
   if (tela === 'historico-chat' && historicoSelecionado) {
@@ -463,6 +492,7 @@ export default function App() {
       agendamentos={agendamentos}
       historico={historico}
       documentos={documentos}
+      renovacoes={renovacoes}
       loading={homeLoading}
       mostrarTudo={mostrarHistoricoCompleto}
       onMostrarTudo={() => setMostrarHistoricoCompleto((valor) => !valor)}
@@ -473,16 +503,18 @@ export default function App() {
       onRenovacao={() => { setWebPage({ title: 'Renovar receita', url: URL_RENOVACAO }); setTela('web'); }}
       onEspecialistas={() => setTela('servicos')}
       onPsicologia={() => { setWebPage({ title: 'Psicologia', url: 'https://consultaja24h.com.br/psicologo-online' }); setTela('web'); }}
+      onAbrirRenovacao={(item) => { setRenovacaoSelecionada(item); setTela('renovacao'); }}
       onAbrirAtendimento={(item) => { setHistoricoOrigem('home'); setHistoricoSelecionado(item); setTela('historico-chat'); }}
     />
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, documentos, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirAtendimento }: {
+function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoes, loading, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
   documentos: DocumentoPaciente[];
+  renovacoes: RenovacaoPaciente[];
   loading: boolean;
   mostrarTudo: boolean;
   onMostrarTudo: () => void;
@@ -493,12 +525,15 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
   onRenovacao: () => void;
   onEspecialistas: () => void;
   onPsicologia: () => void;
+  onAbrirRenovacao: (item: RenovacaoPaciente) => void;
   onAbrirAtendimento: (item: AtendimentoHistorico) => void;
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
-  const atendimentoAtivo = historico.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
-  const ultimo = historico.find((item) => String(item.status || '').trim().toLowerCase() !== 'assumido');
-  const itensHistorico = mostrarTudo ? historico : historico.slice(0, 4);
+  const historicoConsultas = historico.filter((item) => !String(item.tipo || '').toLowerCase().startsWith('renovacao_'));
+  const atendimentoAtivo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
+  const ultimo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() !== 'assumido');
+  const itensHistorico = mostrarTudo ? historicoConsultas : historicoConsultas.slice(0, 4);
+  const renovacaoAtual = renovacoes.find((item) => String(item.pagamento_status || '').toLowerCase() === 'confirmado') || null;
   const proximos = useMemo(
     () => agendamentos.filter((item) => new Date(item.horario_agendado).getTime() >= Date.now()).slice(0, 2),
     [agendamentos],
@@ -553,6 +588,22 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
           </View>
         </Pressable>
 
+        {renovacaoAtual ? (
+          <Pressable onPress={() => onAbrirRenovacao(renovacaoAtual)} style={({ pressed }) => [styles.renewalStatusCard, pressed && styles.quickCardPressed]}>
+            <View style={styles.renewalStatusTop}>
+              <Text style={styles.renewalStatusKicker}>RENOVAÇÃO DE RECEITA</Text>
+              <View style={[styles.renewalStatusPill, renovacaoAtual.etapa === 'pronta' && styles.renewalStatusPillReady]}>
+                <Text style={[styles.renewalStatusPillText, renovacaoAtual.etapa === 'pronta' && styles.renewalStatusPillTextReady]}>
+                  {renovacaoAtual.etapa === 'pronta' ? 'RECEITA PRONTA' : renovacaoAtual.etapa === 'enviada' ? 'ENVIADA' : 'EM ANÁLISE'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.renewalStatusTitle}>{renovacaoAtual.tipo === 'renovacao_fisica' ? 'Receita física' : 'Receita digital'}</Text>
+            <Text style={styles.renewalStatusText}>{renovacaoAtual.etapa === 'pronta' ? 'Seu documento já está disponível no app.' : renovacaoAtual.etapa === 'enviada' ? 'A receita foi enviada. Toque para acompanhar.' : 'Sua solicitação foi recebida e está sendo analisada.'}</Text>
+            <Text style={styles.renewalStatusAction}>{renovacaoAtual.etapa === 'pronta' ? 'Ver receita' : 'Acompanhar solicitação'} ›</Text>
+          </Pressable>
+        ) : null}
+
         {ultimo && (
           <>
             <SectionHeader title="Último atendimento" />
@@ -568,8 +619,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
           </>
         )}
 
-        <SectionHeader title="Meus atendimentos" action={historico.length > 4 ? (mostrarTudo ? 'Ver menos' : 'Ver todos') : undefined} onAction={onMostrarTudo} />
-        {loading && historico.length === 0 ? (
+        <SectionHeader title="Meus atendimentos" action={historicoConsultas.length > 4 ? (mostrarTudo ? 'Ver menos' : 'Ver todos') : undefined} onAction={onMostrarTudo} />
+        {loading && historicoConsultas.length === 0 ? (
           <HomeHistorySkeleton />
         ) : itensHistorico.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.historyCarousel} snapToInterval={286} decelerationRate="fast">
@@ -615,6 +666,79 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, loading, 
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function RenovacaoAcompanhamento({ renovacao, onVoltar, onAtualizar }: { renovacao: RenovacaoPaciente | null; onVoltar: () => void; onAtualizar: () => Promise<void> | void }) {
+  const motion = usePageSlide(onVoltar);
+  const [docAberto, setDocAberto] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function atualizar() {
+    setRefreshing(true);
+    try { await onAtualizar(); } finally { setRefreshing(false); }
+  }
+
+  const pronta = renovacao?.etapa === 'pronta' || renovacao?.etapa === 'enviada';
+  const fisica = renovacao?.tipo === 'renovacao_fisica';
+
+  return (
+    <Animated.View style={motion.style}>
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.pageWrap} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={atualizar} tintColor="#16c783" colors={["#16c783"]} />}>
+          <PageHeader title="Renovação de receita" onVoltar={motion.close} />
+          {!renovacao ? (
+            <View style={styles.renewalLoading}><ActivityIndicator color="#16c783" /><Text style={styles.renewalLoadingText}>Carregando solicitação...</Text></View>
+          ) : (
+            <>
+              <View style={styles.renewalHero}>
+                <Text style={styles.renewalHeroKicker}>{fisica ? 'RECEITA FÍSICA' : 'RECEITA DIGITAL'}</Text>
+                <Text style={styles.renewalHeroTitle}>{renovacao.etapa === 'pronta' ? 'Sua receita está pronta' : renovacao.etapa === 'enviada' ? 'Sua receita foi enviada' : 'Sua solicitação está em análise'}</Text>
+                <Text style={styles.renewalHeroText}>{renovacao.etapa === 'pronta' ? 'O documento já pode ser aberto, salvo ou compartilhado pelo app.' : renovacao.etapa === 'enviada' ? 'A emissão foi concluída e o envio já foi realizado.' : 'Assim que a emissão for concluída, o documento aparecerá aqui automaticamente.'}</Text>
+              </View>
+
+              <View style={styles.renewalTimeline}>
+                <RenewalStep done title="Pagamento confirmado" />
+                <RenewalStep done={pronta} active={!pronta} title="Análise e emissão" />
+                <RenewalStep done={pronta} active={renovacao.etapa === 'pronta'} title={fisica ? 'Receita emitida' : 'Receita disponível'} />
+                {fisica ? <RenewalStep done={renovacao.etapa === 'enviada'} active={renovacao.etapa === 'enviada'} title="Envio" last /> : null}
+              </View>
+
+              {renovacao.receita_url ? (
+                <Pressable onPress={() => setDocAberto(true)} style={({ pressed }) => [styles.renewalDocumentCard, pressed && styles.quickCardPressed]}>
+                  <View style={styles.documentPdf}><Text style={styles.documentPdfText}>PDF</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.renewalDocumentTitle}>{renovacao.receita_nome || 'Receita médica.pdf'}</Text>
+                    <Text style={styles.renewalDocumentText}>Abrir receita no app</Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ) : null}
+
+              {fisica && renovacao.rastreio ? (
+                <View style={styles.renewalTracking}>
+                  <Text style={styles.renewalTrackingLabel}>CÓDIGO DE RASTREIO</Text>
+                  <Text style={styles.renewalTrackingCode}>{renovacao.rastreio}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.renewalUpdatedHint}>Puxe a tela para baixo para atualizar o status.</Text>
+            </>
+          )}
+        </ScrollView>
+        <DocumentViewer visible={docAberto} url={renovacao?.receita_url} name={renovacao?.receita_nome || 'Receita médica.pdf'} type="pdf" onClose={() => setDocAberto(false)} />
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+function RenewalStep({ title, done, active, last }: { title: string; done?: boolean; active?: boolean; last?: boolean }) {
+  return <View style={[styles.renewalStep, last && { marginBottom: 0 }]}>
+    <View style={styles.renewalStepRail}>
+      <View style={[styles.renewalStepDot, done && styles.renewalStepDotDone, active && styles.renewalStepDotActive]}>{done ? <Text style={styles.renewalStepCheck}>✓</Text> : null}</View>
+      {!last ? <View style={[styles.renewalStepLine, done && styles.renewalStepLineDone]} /> : null}
+    </View>
+    <Text style={[styles.renewalStepText, (done || active) && styles.renewalStepTextActive]}>{title}</Text>
+  </View>;
 }
 
 function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
@@ -1401,6 +1525,41 @@ const styles = StyleSheet.create({
   skeletonLast: { height: 150, borderRadius: 20, backgroundColor: themeColor('#e1e8e4', '#0d1916') },
   skeletonHistoryCard: { minHeight: 120, flexDirection: 'row', borderRadius: 17, padding: 15, marginBottom: 9, backgroundColor: themeColor('#e4ebe7', '#0c1816') },
   skeletonDot: { width: 9, height: 9, borderRadius: 5, marginTop: 3, marginRight: 12, backgroundColor: themeColor('#c6d3cc', '#20352e') },
+
+  renewalStatusCard: { backgroundColor: themeColor('#e7f0eb', '#0e1c18'), borderRadius: 20, padding: 17, marginBottom: 22 },
+  renewalStatusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  renewalStatusKicker: { color: themeColor('#18724f', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .9 },
+  renewalStatusPill: { backgroundColor: themeColor('#dfe8e3', '#17251f'), borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
+  renewalStatusPillReady: { backgroundColor: themeColor('#d9f7e7', '#153a2b') },
+  renewalStatusPillText: { color: themeColor('#66736e', '#9aa7a2'), fontSize: 9, fontWeight: '800' },
+  renewalStatusPillTextReady: { color: themeColor('#0b8f61', '#78f25f') },
+  renewalStatusTitle: { color: themeColor('#14201d', '#fff'), fontSize: 17, fontWeight: '800', marginTop: 12 },
+  renewalStatusText: { color: themeColor('#596763', '#9ba9a4'), fontSize: 12.5, lineHeight: 18, marginTop: 5 },
+  renewalStatusAction: { color: '#16c783', fontSize: 12, fontWeight: '800', marginTop: 11 },
+  renewalLoading: { minHeight: 300, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  renewalLoadingText: { color: themeColor('#66736e', '#8a97a6'), fontSize: 12 },
+  renewalHero: { backgroundColor: themeColor('#e6eee9', '#0e1c18'), borderRadius: 22, padding: 20, marginBottom: 18 },
+  renewalHeroKicker: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  renewalHeroTitle: { color: themeColor('#14201d', '#fff'), fontSize: 22, lineHeight: 28, fontWeight: '800', marginTop: 9 },
+  renewalHeroText: { color: themeColor('#596763', '#9ba9a4'), fontSize: 13, lineHeight: 20, marginTop: 8 },
+  renewalTimeline: { backgroundColor: themeColor('#edf3ef', '#0b1715'), borderRadius: 18, padding: 17, marginBottom: 14 },
+  renewalStep: { flexDirection: 'row', minHeight: 48, marginBottom: 2 },
+  renewalStepRail: { width: 30, alignItems: 'center' },
+  renewalStepDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: themeColor('#b8c5bf', '#31423c'), alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#edf3ef', '#0b1715') },
+  renewalStepDotDone: { borderColor: '#16c783', backgroundColor: '#16c783' },
+  renewalStepDotActive: { borderColor: '#16c783' },
+  renewalStepCheck: { color: '#07100f', fontSize: 12, fontWeight: '900' },
+  renewalStepLine: { flex: 1, width: 1.5, backgroundColor: themeColor('#c9d4ce', '#24332e'), marginVertical: 4 },
+  renewalStepLineDone: { backgroundColor: '#16c783' },
+  renewalStepText: { color: themeColor('#71807a', '#75827e'), fontSize: 13, fontWeight: '700', paddingTop: 2, marginLeft: 9 },
+  renewalStepTextActive: { color: themeColor('#14201d', '#eef5f1') },
+  renewalDocumentCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: themeColor('#edf3ef', '#0d1916'), borderRadius: 18, padding: 15, marginBottom: 14 },
+  renewalDocumentTitle: { color: themeColor('#14201d', '#eef5f1'), fontSize: 14, fontWeight: '800' },
+  renewalDocumentText: { color: '#67bd94', fontSize: 11.5, fontWeight: '700', marginTop: 4 },
+  renewalTracking: { backgroundColor: themeColor('#edf3ef', '#0d1916'), borderRadius: 16, padding: 15, marginBottom: 14 },
+  renewalTrackingLabel: { color: themeColor('#66736e', '#75827e'), fontSize: 9.5, fontWeight: '900', letterSpacing: .8 },
+  renewalTrackingCode: { color: themeColor('#14201d', '#fff'), fontSize: 16, fontWeight: '800', marginTop: 7, letterSpacing: .5 },
+  renewalUpdatedHint: { color: themeColor('#71807a', '#75827e'), textAlign: 'center', fontSize: 11, marginTop: 8, marginBottom: 8 },
 
   pageWrap: { padding: 20, paddingBottom: 50 },
   pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },

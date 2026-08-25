@@ -20,6 +20,8 @@ import {
 } from './api/client';
 import AtendimentoAtual from './components/AtendimentoAtual';
 import AtendimentoEmAndamentoCard from './components/AtendimentoEmAndamentoCard';
+import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/push';
+import { emitPushNavigation } from './navigation/pushNavigation';
 
 export default function AppRoot() {
   const [checking, setChecking] = useState(true);
@@ -78,6 +80,58 @@ export default function AppRoot() {
     return () => {
       ativo = false;
       clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function registrar() {
+      if (!ativo) return;
+      await registrarPushDoPaciente();
+    }
+
+    registrar();
+    const registerTimer = setInterval(registrar, 5000);
+
+    const pararObservacao = observarToquesEmPush(async (data) => {
+      const kind = String(data.kind || '');
+      const atendimentoId = Number(data.atendimentoId || 0);
+      if (!atendimentoId) return;
+
+      if (kind === 'renovacao') {
+        setModoAtendimento(false);
+        setMostrarInicio(true);
+        emitPushNavigation({
+          kind: 'renovacao',
+          atendimentoId,
+          documentoUrl: typeof data.documentoUrl === 'string' ? data.documentoUrl : null,
+        });
+        return;
+      }
+
+      if (kind === 'chat') {
+        try {
+          const result = await carregarAtendimentoEmAndamento();
+          const atual = result.atendimento || null;
+          if (atual && Number(atual.id) === atendimentoId) {
+            atendimentoIdRef.current = atual.id;
+            etapaRef.current = atual.etapa;
+            chatFechadoManualRef.current = false;
+            setAtendimento(atual);
+            setMostrarInicio(false);
+            setModoAtendimento(true);
+          }
+        } catch {
+          // O polling normal recupera a consulta se houver falha temporária.
+        }
+      }
+    });
+
+    return () => {
+      ativo = false;
+      clearInterval(registerTimer);
+      pararObservacao();
     };
   }, []);
 

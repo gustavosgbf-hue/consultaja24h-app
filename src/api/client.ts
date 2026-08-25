@@ -324,3 +324,37 @@ export async function consultarStatusAtendimento(atendimentoId: number) {
     fila?: { posicao?: number; total?: number };
   }>(response);
 }
+
+
+export type RenovacaoPaciente = {
+  id: number;
+  tipo: string;
+  etapa: 'pagamento' | 'analise' | 'pronta' | 'enviada';
+  status?: string | null;
+  pagamento_status?: string | null;
+  criado_em?: string | null;
+  medicamento?: string | null;
+  receita_pronta_em?: string | null;
+  receita_url?: string | null;
+  receita_nome?: string | null;
+  enviada_em?: string | null;
+  rastreio?: string | null;
+};
+
+export async function registrarPushTokenPaciente(expoPushToken: string, plataforma: string) {
+  return postJson<{ ok: boolean }>(
+    '/api/paciente/push-token',
+    { expo_push_token: expoPushToken, plataforma },
+    true,
+  );
+}
+
+export async function carregarRenovacoesPaciente() {
+  return authenticatedFetch<{ ok: boolean; renovacoes: RenovacaoPaciente[] }>('/api/paciente/renovacoes');
+}
+
+export async function carregarRenovacaoPaciente(id: number) {
+  return authenticatedFetch<{ ok: boolean; renovacao: RenovacaoPaciente }>(
+    '/api/paciente/renovacao/' + encodeURIComponent(String(id)),
+  );
+}
