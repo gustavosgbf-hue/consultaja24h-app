@@ -17,14 +17,18 @@ on:
         required: false
         type: string
         default: Atualização do app
+  push:
+    branches: [main]
+    paths:
+      - '.deploy/request.json'
 
 concurrency:
-  group: iphone-deploy-${{ github.ref }}
+  group: iphone-deploy
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validar projeto
+  deploy:
+    name: Validar e executar
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -38,13 +42,38 @@ jobs:
           node-version: '20'
           cache: npm
 
+      - name: Resolve deploy request
+        id: request
+        shell: bash
+        env:
+          MANUAL_ACTION: ${{ inputs.action }}
+          MANUAL_MESSAGE: ${{ inputs.message }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ACTION="$MANUAL_ACTION"
+            MESSAGE="$MANUAL_MESSAGE"
+          else
+            ACTION=$(node -e "const r=require('./.deploy/request.json'); process.stdout.write(String(r.action || 'none'))")
+            MESSAGE=$(node -e "const r=require('./.deploy/request.json'); process.stdout.write(String(r.message || 'Atualização do app'))")
+          fi
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "message=$MESSAGE" >> "$GITHUB_OUTPUT"
+          echo "Solicitação: $ACTION"
+
+      - name: Ignore initialization request
+        if: ${{ steps.request.outputs.action == 'none' }}
+        run: echo "Nenhum deploy solicitado."
+
       - name: Install dependencies
+        if: ${{ steps.request.outputs.action != 'none' }}
         run: npm ci
 
       - name: Typecheck
+        if: ${{ steps.request.outputs.action != 'none' }}
         run: npm run typecheck
 
       - name: Verify Expo authentication
+        if: ${{ steps.request.outputs.action != 'none' }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "EXPO_TOKEN não está configurado no repositório."
@@ -52,71 +81,22 @@ jobs:
           fi
           npx eas-cli@latest whoami
 
-  ota:
-    name: Publicar OTA
-    if: ${{ inputs.action == 'ota' }}
-    needs: validate
-    runs-on: ubuntu-latest
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Publish production OTA
-        run: npx eas-cli@latest update --channel production --message "${{ inputs.message }}" --non-interactive
-
-  ios_build:
-    name: Gerar build iOS
-    if: ${{ inputs.action == 'ios_build' }}
-    needs: validate
-    runs-on: ubuntu-latest
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+        if: ${{ steps.request.outputs.action == 'ota' }}
+        env:
+          OTA_MESSAGE: ${{ steps.request.outputs.message }}
+        run: npx eas-cli@latest update --channel production --message "$OTA_MESSAGE" --non-interactive
 
       - name: Start production iOS build
+        if: ${{ steps.request.outputs.action == 'ios_build' }}
         run: npx eas-cli@latest build --platform ios --profile production --non-interactive --no-wait
 
-  submit_testflight:
-    name: Enviar última build ao TestFlight
-    if: ${{ inputs.action == 'submit_testflight' }}
-    needs: validate
-    runs-on: ubuntu-latest
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Submit latest iOS build
+        if: ${{ steps.request.outputs.action == 'submit_testflight' }}
         run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
+
+      - name: Reject unknown request
+        if: ${{ steps.request.outputs.action != 'none' && steps.request.outputs.action != 'ota' && steps.request.outputs.action != 'ios_build' && steps.request.outputs.action != 'submit_testflight' }}
+        run: |
+          echo "Ação desconhecida: ${{ steps.request.outputs.action }}"
+          exit 1
