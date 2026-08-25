@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Appearance,
   DynamicColorIOS,
   Platform,
@@ -47,6 +48,7 @@ function MoonIcon({ active }: { active: boolean }) {
 
 export default function ThemeToggle() {
   const [scheme, setScheme] = useState<ColorSchemeName>('dark');
+  const thumb = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     let active = true;
@@ -56,9 +58,11 @@ export default function ThemeToggle() {
       if (stored === 'light' || stored === 'dark') {
         Appearance.setColorScheme(stored);
         setScheme(stored);
+        thumb.setValue(stored === 'dark' ? 1 : 0);
       } else {
         Appearance.setColorScheme('dark');
         setScheme('dark');
+        thumb.setValue(1);
         try {
           await SecureStore.setItemAsync(THEME_KEY, 'dark');
         } catch {
@@ -67,23 +71,40 @@ export default function ThemeToggle() {
       }
     }).catch(() => {
       Appearance.setColorScheme('dark');
+      thumb.setValue(1);
       if (active) setScheme('dark');
     });
 
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      if (active) setScheme(colorScheme ?? 'dark');
+      if (!active) return;
+      const next = colorScheme ?? 'dark';
+      setScheme(next);
+      Animated.spring(thumb, {
+        toValue: next === 'dark' ? 1 : 0,
+        damping: 20,
+        stiffness: 260,
+        mass: 0.72,
+        useNativeDriver: true,
+      }).start();
     });
 
     return () => {
       active = false;
       subscription.remove();
     };
-  }, []);
+  }, [thumb]);
 
   const dark = scheme !== 'light';
 
   async function toggle() {
     const next: ThemePreference = dark ? 'light' : 'dark';
+    Animated.spring(thumb, {
+      toValue: next === 'dark' ? 1 : 0,
+      damping: 20,
+      stiffness: 280,
+      mass: 0.68,
+      useNativeDriver: true,
+    }).start();
     Appearance.setColorScheme(next);
     setScheme(next);
     try {
@@ -93,6 +114,8 @@ export default function ThemeToggle() {
     }
   }
 
+  const translateX = thumb.interpolate({ inputRange: [0, 1], outputRange: [0, 27] });
+
   return (
     <Pressable
       onPress={toggle}
@@ -101,8 +124,9 @@ export default function ThemeToggle() {
       accessibilityState={{ checked: dark }}
       accessibilityLabel={dark ? 'Ativar modo claro' : 'Ativar modo escuro'}
     >
-      <View style={[styles.side, !dark && styles.sideActive]}><SunIcon active={!dark} /></View>
-      <View style={[styles.side, dark && styles.sideActive]}><MoonIcon active={dark} /></View>
+      <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]} />
+      <View style={styles.side}><SunIcon active={!dark} /></View>
+      <View style={styles.side}><MoonIcon active={dark} /></View>
     </Pressable>
   );
 }
@@ -115,19 +139,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: dynamicColor('#e7eeea', '#0d1916'),
+    backgroundColor: dynamicColor('#dfe8e3', '#0d1916'),
+    overflow: 'hidden',
   },
-  side: {
-    flex: 1,
+  thumb: {
+    position: 'absolute',
+    left: 3,
+    top: 3,
+    width: 29,
     height: 26,
     borderRadius: 13,
+    backgroundColor: dynamicColor('#f7faf8', '#163228'),
+  },
+  side: {
+    width: 28,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sideActive: {
-    backgroundColor: dynamicColor('#ffffff', '#163228'),
+    zIndex: 1,
   },
   pressed: {
-    opacity: 0.72,
+    opacity: 0.78,
   },
 });
