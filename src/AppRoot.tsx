@@ -169,9 +169,9 @@ export default function AppRoot() {
 }
 
 const styles = StyleSheet.create({
-  appWrap: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
-  safe: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#eef3f0', '#07100f') },
+  appWrap: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  safe: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e8efeb', '#07100f') },
   wrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   brandBlock: { marginBottom: 22 },
   brand: { color: themeColor('#14201d', '#fff'), fontSize: 30, fontWeight: '800', letterSpacing: -1 },
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: themeColor('#e6efe9', '#10201d'),
+    backgroundColor: themeColor('#dfe9e3', '#10201d'),
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 18,

@@ -4,6 +4,7 @@ import {
   Animated,
   Alert,
   DynamicColorIOS,
+  Linking,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -21,6 +22,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
   AudioModule,
+  getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync,
   RecordingPresets,
   setAudioModeAsync,
   useAudioPlayer,
@@ -131,8 +134,9 @@ function ReplyIcon({ color = '#7eb29e' }: { color?: string }) {
 function DeliveryChecks({ read }: { read: boolean }) {
   const color = read ? '#16c783' : themeColor('#708079', '#71857c');
   return (
-    <Svg width={read ? 19 : 13} height={12} viewBox={read ? '0 0 20 12' : '0 0 13 12'} fill="none">
-      {read ? <Path d="M1.5 6.3 4.4 9.1 9.3 3.3M8.2 8.8l1.4 1.3 7-7.6" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /> : <Path d="M1.5 6.3 4.4 9.1 10.7 2.7" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />}
+    <Svg width={read ? 18 : 12} height={11} viewBox={read ? '0 0 18 11' : '0 0 12 11'} fill="none">
+      <Path d="M1 5.7 3.6 8.3 8.9 2.5" stroke={color} strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+      {read ? <Path d="M6.2 5.7 8.8 8.3 14.1 2.5" stroke={color} strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" /> : null}
     </Svg>
   );
 }
@@ -199,12 +203,12 @@ function SwipeMessage({ mensagem, somenteLeitura, onReply, children }: SwipeProp
   const responder = useMemo(
     () => PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gesture) =>
-        !somenteLeitura && gesture.dx > 5 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        !somenteLeitura && gesture.dx > 4 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 0.65,
       onPanResponderMove: (_event, gesture) => {
-        x.setValue(Math.max(0, Math.min(58, gesture.dx)));
+        x.setValue(Math.max(0, Math.min(70, gesture.dx)));
       },
       onPanResponderRelease: (_event, gesture) => {
-        if (gesture.dx >= 28) onReply(mensagem);
+        if (gesture.dx >= 24) onReply(mensagem);
         Animated.spring(x, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }).start();
       },
       onPanResponderTerminate: () => {
@@ -214,8 +218,8 @@ function SwipeMessage({ mensagem, somenteLeitura, onReply, children }: SwipeProp
     [mensagem, onReply, somenteLeitura, x],
   );
 
-  const hintOpacity = x.interpolate({ inputRange: [0, 8, 28], outputRange: [0, 0.4, 1], extrapolate: 'clamp' });
-  const hintScale = x.interpolate({ inputRange: [0, 28], outputRange: [0.86, 1], extrapolate: 'clamp' });
+  const hintOpacity = x.interpolate({ inputRange: [0, 7, 24], outputRange: [0, 0.4, 1], extrapolate: 'clamp' });
+  const hintScale = x.interpolate({ inputRange: [0, 24], outputRange: [0.86, 1], extrapolate: 'clamp' });
 
   return (
     <View style={styles.swipeWrap}>
@@ -246,6 +250,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   const [erro, setErro] = useState('');
   const [respondendo, setRespondendo] = useState<MensagemChatV2 | null>(null);
   const [menuAnexo, setMenuAnexo] = useState(false);
+  const [menuAnexoRenderizado, setMenuAnexoRenderizado] = useState(false);
   const [viewer, setViewer] = useState<ViewerState>(null);
   const attachmentAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView | null>(null);
@@ -284,16 +289,28 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   }, [mensagens.length]);
 
   useEffect(() => {
-    if (!menuAnexo) return;
-    attachmentAnim.setValue(0);
-    Animated.spring(attachmentAnim, {
-      toValue: 1,
-      damping: 19,
-      stiffness: 260,
-      mass: 0.72,
+    if (menuAnexo) {
+      setMenuAnexoRenderizado(true);
+      attachmentAnim.stopAnimation();
+      Animated.spring(attachmentAnim, {
+        toValue: 1,
+        damping: 19,
+        stiffness: 260,
+        mass: 0.72,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    if (!menuAnexoRenderizado) return;
+    attachmentAnim.stopAnimation();
+    Animated.timing(attachmentAnim, {
+      toValue: 0,
+      duration: 145,
       useNativeDriver: true,
-    }).start();
-  }, [attachmentAnim, menuAnexo]);
+    }).start(({ finished }) => {
+      if (finished) setMenuAnexoRenderizado(false);
+    });
+  }, [attachmentAnim, menuAnexo, menuAnexoRenderizado]);
 
   const mensagensPorId = useMemo(() => {
     const mapa = new Map<number, MensagemChatV2>();
@@ -398,7 +415,8 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   async function iniciarAudio() {
     setMenuAnexo(false);
     try {
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      const currentPermission = await getRecordingPermissionsAsync();
+      const permission = currentPermission.granted ? currentPermission : await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('Microfone bloqueado', 'Autorize o acesso ao microfone nos Ajustes do iPhone para enviar áudio.');
         return;
@@ -553,7 +571,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
         ) : null}
       </KeyboardAvoidingView>
 
-      {menuAnexo && !recorderState.isRecording ? (
+      {menuAnexoRenderizado && !recorderState.isRecording ? (
         <View style={styles.attachmentOverlay}>
           <Pressable style={styles.attachmentBackdrop} onPress={() => setMenuAnexo(false)} accessibilityLabel="Fechar menu de anexos" />
           <Animated.View
@@ -580,7 +598,13 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
           <View style={styles.viewerHeader}>
             <Pressable onPress={() => setViewer(null)} style={styles.viewerBack} accessibilityLabel="Fechar documento"><Text style={styles.backText}>‹</Text></Pressable>
             <Text style={styles.viewerTitle} numberOfLines={1}>{viewer?.name || 'Documento'}</Text>
-            <View style={{ width: 42 }} />
+            <Pressable
+              onPress={() => viewer?.url && Linking.openURL(viewer.url)}
+              style={styles.viewerExternal}
+              accessibilityLabel="Abrir documento no navegador"
+            >
+              <Text style={styles.viewerExternalText}>↗</Text>
+            </Pressable>
           </View>
           {viewer?.type === 'imagem' ? (
             <View style={styles.imageViewer}><Image source={{ uri: viewer.url }} style={styles.viewerImage} resizeMode="contain" /></View>
@@ -594,8 +618,8 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
-  screen: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  safe: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  screen: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
   header: { minHeight: 86, paddingHorizontal: 14, paddingTop: 7, paddingBottom: 11, flexDirection: 'row', alignItems: 'center' },
   backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e4ece7', '#0d1916') },
   backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
@@ -603,7 +627,7 @@ const styles = StyleSheet.create({
   headerToggle: { width: 68, alignItems: 'flex-end' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16c783' },
-  status: { flexShrink: 1, fontSize: 9, fontWeight: '800', letterSpacing: 1, color: themeColor('#18724f', '#79a493') },
+  status: { flexShrink: 1, fontSize: 9, fontWeight: '700', letterSpacing: 1, color: themeColor('#18724f', '#79a493') },
   doctor: { marginTop: 4, maxWidth: '100%', color: themeColor('#14201d', '#f2f7f4'), fontSize: 15, fontWeight: '700', textAlign: 'center' },
   id: { marginTop: 2, color: themeColor('#66736e', '#6e7e78'), fontSize: 10.5 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -619,22 +643,22 @@ const styles = StyleSheet.create({
   messageRow: { width: '100%', marginVertical: 4 },
   mineRow: { alignItems: 'flex-end' },
   theirRow: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '86%', borderRadius: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 7 },
+  bubble: { maxWidth: '84%', borderRadius: 17, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   mineBubble: { backgroundColor: themeColor('#d8eee3', '#123d31'), borderBottomRightRadius: 6 },
   theirBubble: { backgroundColor: themeColor('#f7faf8', '#10201c'), borderBottomLeftRadius: 6 },
   quotedMessage: { backgroundColor: themeColor('#edf3f0', '#0c1916'), borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7, marginBottom: 7, minWidth: 150 },
-  quotedAuthor: { color: themeColor('#18724f', '#76ad97'), fontSize: 10, fontWeight: '800', marginBottom: 2 },
+  quotedAuthor: { color: themeColor('#18724f', '#76ad97'), fontSize: 10, fontWeight: '700', marginBottom: 2 },
   quotedText: { color: themeColor('#596763', '#9cad a6'.replace(' ','')), fontSize: 11, lineHeight: 15 },
-  messageText: { color: themeColor('#26332f', '#dce6e2'), fontSize: 14.5, lineHeight: 20 },
+  messageText: { color: themeColor('#26332f', '#dce6e2'), fontSize: 14.5, lineHeight: 19 },
   mineText: { color: themeColor('#193c31', '#edf8f3') },
-  metaRow: { minWidth: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 5 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 4 },
   time: { color: themeColor('#7a8782', '#71807b'), fontSize: 9.5 },
   mineTime: { color: themeColor('#567268', '#769087') },
-  delivery: { minWidth: 19, alignItems: 'flex-end', justifyContent: 'center', marginLeft: 3 },
+  delivery: { width: 18, alignItems: 'flex-end', justifyContent: 'center' },
   fileCard: { minWidth: 230, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: themeColor('#f3f7f5', '#0c1916'), borderRadius: 13, padding: 10, marginBottom: 7 },
   fileIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e4f4ec', '#123027') },
   fileMeta: { flex: 1, minWidth: 0 },
-  fileName: { color: themeColor('#14201d', '#eef5f1'), fontSize: 12.5, fontWeight: '800' },
+  fileName: { color: themeColor('#14201d', '#eef5f1'), fontSize: 12.5, fontWeight: '700' },
   fileType: { color: themeColor('#66736e', '#76867f'), fontSize: 10.5, marginTop: 2 },
   fileArrow: { color: themeColor('#66736e', '#71807b'), fontSize: 24 },
   audioCard: { minWidth: 230, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3, marginBottom: 4 },
@@ -644,7 +668,7 @@ const styles = StyleSheet.create({
   audioProgress: { height: 3, borderRadius: 2, backgroundColor: '#16c783' },
   audioTime: { marginTop: 5, color: themeColor('#66736e', '#7f9189'), fontSize: 9.5 },
   error: { color: '#f29aa1', textAlign: 'center', fontSize: 11.5, marginTop: 12 },
-  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 10, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 10, backgroundColor: themeColor('#e8efeb', '#07100f') },
   composer: { minHeight: 52, flexDirection: 'row', alignItems: 'flex-end', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 19, padding: 5 },
   iconButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, minHeight: 42, maxHeight: 110, paddingHorizontal: 4, paddingVertical: 10, color: themeColor('#14201d', '#eef5f1'), fontSize: 15 },
@@ -655,7 +679,7 @@ const styles = StyleSheet.create({
   attachmentMenu: { position: 'absolute', left: 12, bottom: Platform.OS === 'ios' ? 82 : 72, flexDirection: 'row', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 18, padding: 8, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 7 }, elevation: 9 },
   attachmentOption: { width: 76, minHeight: 67, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: themeColor('#edf3ef', '#101d1a') },
   attachmentIcon: { height: 23, justifyContent: 'center' },
-  attachmentLabel: { color: themeColor('#52605b', '#a9b5b0'), fontSize: 10.5, fontWeight: '700' },
+  attachmentLabel: { color: themeColor('#52605b', '#a9b5b0'), fontSize: 10.5, fontWeight: '600' },
   replyComposer: { flexDirection: 'row', alignItems: 'center', backgroundColor: themeColor('#eef3f0', '#0d1916'), borderRadius: 13, marginBottom: 6, paddingLeft: 12, minHeight: 48 },
   replyComposerBody: { flex: 1, minWidth: 0 },
   replyComposerLabel: { color: themeColor('#18724f', '#76ad97'), fontSize: 10.5, fontWeight: '800' },
@@ -666,11 +690,13 @@ const styles = StyleSheet.create({
   recordDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#e15b64', marginLeft: 3, marginRight: 8 },
   recordingText: { flex: 1, color: themeColor('#52605b', '#dce6e2'), fontSize: 13.5, fontWeight: '700' },
   recordSend: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
-  viewerSafe: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  viewerSafe: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
   viewerHeader: { minHeight: 64, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   viewerBack: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#ffffff', '#0d1916') },
-  viewerTitle: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '800' },
-  webview: { flex: 1, backgroundColor: themeColor('#eef3f0', '#07100f') },
+  viewerTitle: { flex: 1, marginHorizontal: 10, textAlign: 'center', color: themeColor('#14201d', '#eef5f1'), fontSize: 15, fontWeight: '700' },
+  viewerExternal: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#dfe8e3', '#0d1916') },
+  viewerExternalText: { color: themeColor('#18724f', '#78f25f'), fontSize: 22, fontWeight: '500', marginTop: -2 },
+  webview: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
   imageViewer: { flex: 1, backgroundColor: themeColor('#eef2f0', '#040807'), alignItems: 'center', justifyContent: 'center' },
   viewerImage: { width: '100%', height: '100%' },
 });
