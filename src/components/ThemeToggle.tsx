@@ -19,8 +19,12 @@ function dynamicColor(light: string, dark: string) {
   return Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
 }
 
+function currentScheme(): ColorSchemeName {
+  return Appearance.getColorScheme() ?? 'dark';
+}
+
 export default function ThemeToggle() {
-  const [scheme, setScheme] = useState<ColorSchemeName>(Appearance.getColorScheme());
+  const [scheme, setScheme] = useState<ColorSchemeName>(() => currentScheme());
 
   useEffect(() => {
     let active = true;
@@ -31,12 +35,12 @@ export default function ThemeToggle() {
         Appearance.setColorScheme(stored);
         setScheme(stored);
       } else {
-        setScheme(Appearance.getColorScheme());
+        setScheme(currentScheme());
       }
     }).catch(() => undefined);
 
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      if (active) setScheme(colorScheme);
+      if (active) setScheme(colorScheme ?? 'dark');
     });
 
     return () => {
