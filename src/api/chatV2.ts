@@ -1,4 +1,5 @@
 import { getSessionToken } from '../auth/session';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const API_BASE_URL = 'https://triagem-api.onrender.com';
 
@@ -80,24 +81,32 @@ export async function enviarAnexoChatPacienteV2(
   replyToId?: number | null,
 ) {
   const auth = await token();
-  const form = new FormData();
-  form.append('arquivo', {
-    uri: arquivo.uri,
-    name: arquivo.name,
-    type: arquivo.type,
-  } as unknown as Blob);
-  if (replyToId) form.append('reply_to_id', String(replyToId));
-
-  const response = await fetch(
+  const result = await FileSystem.uploadAsync(
     `${API_BASE_URL}/api/paciente/atendimento/${encodeURIComponent(String(atendimentoId))}/upload-v2`,
+    arquivo.uri,
     {
-      method: 'POST',
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: 'arquivo',
+      mimeType: arquivo.type || 'application/octet-stream',
       headers: {
         Authorization: `Bearer ${auth}`,
       },
-      body: form,
+      parameters: replyToId ? { reply_to_id: String(replyToId) } : {},
     },
   );
-  if (response.status === 401) throw new Error('Sessão expirada');
-  return parseJson<{ ok: boolean; mensagem: MensagemChatV2 }>(response);
+
+  let data: any = {};
+  try {
+    data = result.body ? JSON.parse(result.body) : {};
+  } catch {
+    data = {};
+  }
+
+  if (result.status === 401) throw new Error('Sessão expirada');
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(typeof data?.error === 'string' ? data.error : 'Não foi possível enviar o arquivo.');
+  }
+
+  return data as { ok: boolean; mensagem: MensagemChatV2 };
 }
