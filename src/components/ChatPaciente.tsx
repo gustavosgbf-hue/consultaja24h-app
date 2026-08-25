@@ -195,18 +195,27 @@ function AudioMessage({ url }: { url: string }) {
 
 function SwipeMessage({ mensagem, somenteLeitura, onReply, children }: SwipeProps) {
   const x = useRef(new Animated.Value(0)).current;
+  const maxSwipeX = useRef(0);
   const responder = useMemo(
     () => PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gesture) =>
-        !somenteLeitura && gesture.dx > 4 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 0.65,
+        !somenteLeitura && gesture.dx > 5 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 0.45,
+      onPanResponderGrant: () => {
+        maxSwipeX.current = 0;
+      },
       onPanResponderMove: (_event, gesture) => {
-        x.setValue(Math.max(0, Math.min(70, gesture.dx)));
+        const dx = Math.max(0, gesture.dx);
+        maxSwipeX.current = Math.max(maxSwipeX.current, dx);
+        x.setValue(Math.min(78, dx));
       },
       onPanResponderRelease: (_event, gesture) => {
-        if (gesture.dx >= 24) onReply(mensagem);
+        const alcance = Math.max(maxSwipeX.current, Math.max(0, gesture.dx));
+        if (alcance >= 24) onReply(mensagem);
+        maxSwipeX.current = 0;
         Animated.spring(x, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }).start();
       },
       onPanResponderTerminate: () => {
+        maxSwipeX.current = 0;
         Animated.spring(x, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }).start();
       },
     }),
@@ -455,6 +464,21 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     }
   }
 
+  function confirmarEnvioArquivo(arquivo: UploadChatPaciente, tamanho?: number | null) {
+    if (tamanho && tamanho > MAX_FILE_SIZE) {
+      Alert.alert('Arquivo muito grande', 'O limite por anexo é de 15 MB.');
+      return;
+    }
+    Alert.alert(
+      'Enviar arquivo?',
+      arquivo.name || 'Arquivo selecionado',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Enviar', onPress: () => { void enviarArquivo(arquivo, tamanho); } },
+      ],
+    );
+  }
+
   async function abrirCamera() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -464,7 +488,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    await enviarArquivo({
+    confirmarEnvioArquivo({
       uri: asset.uri,
       name: asset.fileName || `Foto_${Date.now()}.jpg`,
       type: asset.mimeType || 'image/jpeg',
@@ -475,7 +499,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9, allowsMultipleSelection: false });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    await enviarArquivo({
+    confirmarEnvioArquivo({
       uri: asset.uri,
       name: asset.fileName || `Imagem_${Date.now()}.jpg`,
       type: asset.mimeType || 'image/jpeg',
@@ -490,7 +514,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    await enviarArquivo({
+    confirmarEnvioArquivo({
       uri: asset.uri,
       name: asset.name || `Documento_${Date.now()}`,
       type: asset.mimeType || 'application/pdf',
