@@ -50,5 +50,13 @@ patch('App.tsx', (src) => {
     out = out.replace(closeMarker, `                <Text style={styles.privacyText}>Seu celular é usado para localizar o cadastro do paciente. Dados do pagador não são usados como identidade clínica.</Text>\n                <Pressable onPress={() => setUsarEmailSenha(true)} style={styles.singleSecondary}><Text style={styles.secondaryActionText}>Entrar com e-mail e senha</Text></Pressable>\n              </View>\n              )}\n              <Text style={styles.helperText}>Primeiro acesso ao app? Confirmaremos seus dados antes de vincular seu histórico.</Text>\n            </>\n          )}\n`);
   }
 
+  const betaMarker = `    const beta = digits(paciente.tel).slice(-11) === BETA_TEST_PHONE;\n`;
+  if (out.includes(betaMarker)) {
+    out = out.replace(
+      betaMarker,
+      `    const beta = [BETA_TEST_PHONE, '98900000000'].includes(digits(paciente.tel).slice(-11));\n`,
+    );
+  }
+
   return out;
 });
