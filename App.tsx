@@ -33,7 +33,7 @@ import {
   carregarRenovacoesPaciente,
   carregarRenovacaoPaciente,
   conversarTriagem,
-  iniciarAtendimentoBeta,
+  solicitarExclusaoConta,
   solicitarOtpPaciente,
   verificarOtpPaciente,
   type RenovacaoPaciente,
@@ -57,7 +57,6 @@ const URL_ESPECIALISTAS = 'https://consultaja24h.com.br/especialistas';
 const SUPPORT_WHATSAPP = '5598989272727';
 
 const PERGUNTA_DOCUMENTO = 'Você precisa de atestado, receita, declaração ou outro documento nesta consulta?';
-const BETA_TEST_PHONE = '98991344646';
 
 const SYSTEM_TRIAGE = `Você é o assistente de triagem do ConsultaJá24h para uma consulta médica por chat.
 O paciente já informou a queixa inicial. NÃO peça nome, telefone ou CPF.
@@ -856,6 +855,37 @@ function DocumentosPaciente({ documentos, onVoltar, onAbrirConsulta }: {
 function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: () => void; onSair: () => void }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
   const motion = usePageSlide(onVoltar);
+  const [excluindoConta, setExcluindoConta] = useState(false);
+
+  function confirmarExclusaoConta() {
+    if (excluindoConta) return;
+    Alert.alert(
+      'Excluir minha conta',
+      'Ao confirmar, sua solicitação de exclusão será registrada. Alguns dados médicos e documentos podem precisar ser preservados pelo prazo legal aplicável.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Solicitar exclusão',
+          style: 'destructive',
+          onPress: async () => {
+            setExcluindoConta(true);
+            try {
+              await solicitarExclusaoConta();
+              Alert.alert(
+                'Solicitação registrada',
+                'Recebemos seu pedido de exclusão da conta. Dados sujeitos a obrigação legal de guarda poderão ser preservados pelo prazo aplicável.',
+                [{ text: 'OK', onPress: onSair }],
+              );
+            } catch (error) {
+              Alert.alert('Não foi possível solicitar a exclusão', error instanceof Error ? error.message : 'Tente novamente em alguns instantes.');
+            } finally {
+              setExcluindoConta(false);
+            }
+          },
+        },
+      ],
+    );
+  }
   return (
     <Animated.View style={motion.style}>
     <SafeAreaView style={styles.safe}>
@@ -888,25 +918,20 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={styles.supportArrow}>›</Text>
         </Pressable>
 
-        <Pressable onPress={abrirSuporte} style={({ pressed }) => [styles.supportButton, pressed && { opacity: 0.82 }]} accessibilityRole="button" accessibilityLabel="Falar com o suporte">
-          <View style={styles.supportIcon}>
-            <View style={styles.supportBubble}>
-              <View style={styles.supportBubbleDot} />
-              <View style={styles.supportBubbleDot} />
-              <View style={styles.supportBubbleDot} />
-            </View>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.supportTitle}>Suporte</Text>
-            <Text style={styles.supportText}>Fale com a equipe da ConsultaJá24h</Text>
-          </View>
-          <Text style={styles.supportArrow}>›</Text>
-        </Pressable>
-
         <View style={styles.profileNotice}>
           <Text style={styles.profileNoticeTitle}>Privacidade</Text>
           <Text style={styles.profileNoticeText}>Seus dados clínicos e documentos são vinculados ao paciente, não ao titular do cartão usado no pagamento.</Text>
         </View>
+
+        <Pressable
+          onPress={confirmarExclusaoConta}
+          disabled={excluindoConta}
+          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+        >
+          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
+        </Pressable>
 
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
@@ -937,7 +962,6 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
   const [respostaTriagem, setRespostaTriagem] = useState('');
   const [triagemResumo, setTriagemResumo] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
-  const [iniciandoBeta, setIniciandoBeta] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
   const motion = usePageSlide(onVoltar);
   const stageX = useRef(new Animated.Value(0)).current;
@@ -1012,7 +1036,7 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
   }
 
   async function irParaPagamento() {
-    if (!validarDados() || iniciandoBeta || salvandoPerfil) return;
+    if (!validarDados() || salvandoPerfil) return;
 
     try {
       const existente = await carregarAtendimentoEmAndamento();
@@ -1039,33 +1063,8 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
       }
     }
 
-    const beta = digits(paciente.tel).slice(-11) === BETA_TEST_PHONE;
-    if (!beta) {
-      mudarEtapa('pagamento', 1);
-      return;
-    }
-
-    setIniciandoBeta(true);
-    try {
-      const data = await iniciarAtendimentoBeta({
-        nome: pacienteNomeSelecionado,
-        cpf: pacienteCpfSelecionado,
-        email: paciente.email || undefined,
-        dataNascimento: pacienteNascimentoSelecionado,
-        atendimentoParaTerceiro: para === 'outra-pessoa',
-      });
-      if (!data.ok || !data.beta || !data.atendimentoId) {
-        throw new Error('Não foi possível iniciar o atendimento beta.');
-      }
-      await iniciarTriagemAposPagamento(data.atendimentoId);
-    } catch (error) {
-      Alert.alert(
-        'Não foi possível iniciar a consulta',
-        error instanceof Error ? error.message : 'Tente novamente em instantes.',
-      );
-    } finally {
-      setIniciandoBeta(false);
-    }
+    mudarEtapa('pagamento', 1);
+    return;
   }
 
   async function iniciarTriagemAposPagamento(atendimentoId: number) {
@@ -1339,7 +1338,7 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
             </ScrollView>
 
             <View style={styles.stickyCta}>
-              <PrimaryButton label="Continuar para pagamento" loading={iniciandoBeta || salvandoPerfil} onPress={irParaPagamento} />
+              <PrimaryButton label="Continuar para pagamento" loading={salvandoPerfil} onPress={irParaPagamento} />
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
@@ -1404,6 +1403,54 @@ function ServicosSaude({ onVoltar, onAbrir }: { onVoltar: () => void; onAbrir: (
   );
 }
 
+const renewalWebCleanupScript = `
+(function() {
+  function hideInternalHeader() {
+    var links = Array.from(document.querySelectorAll('a, button'));
+    var plantao = links.find(function(el) {
+      return /Plantão\s*24h/i.test((el.innerText || el.textContent || '').trim());
+    });
+    if (!plantao) return false;
+
+    var target = plantao.closest('header, nav');
+    if (!target) {
+      var node = plantao.parentElement;
+      while (node && node !== document.body) {
+        var text = (node.innerText || '').replace(/\s+/g, ' ').trim();
+        if (/ConsultaJá24h/i.test(text) && /Plantão\s*24h/i.test(text)) {
+          target = node;
+          break;
+        }
+        node = node.parentElement;
+      }
+    }
+
+    if (!target) target = plantao.parentElement && plantao.parentElement.parentElement;
+    if (!target) return false;
+
+    target.style.setProperty('display', 'none', 'important');
+    target.style.setProperty('height', '0', 'important');
+    target.style.setProperty('min-height', '0', 'important');
+    target.style.setProperty('margin', '0', 'important');
+    target.style.setProperty('padding', '0', 'important');
+    target.style.setProperty('border', '0', 'important');
+    return true;
+  }
+
+  hideInternalHeader();
+  var attempts = 0;
+  var timer = setInterval(function() {
+    attempts += 1;
+    if (hideInternalHeader() || attempts >= 30) clearInterval(timer);
+  }, 200);
+
+  var observer = new MutationObserver(function() { hideInternalHeader(); });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(function() { observer.disconnect(); }, 8000);
+})();
+true;
+`;
+
 function InternalWebScreen({ title, url, onVoltar }: { title: string; url: string; onVoltar: () => void }) {
   const motion = usePageSlide(onVoltar);
   const webRef = useRef<WebView>(null);
@@ -1426,6 +1473,8 @@ function InternalWebScreen({ title, url, onVoltar }: { title: string; url: strin
           <WebView
             ref={webRef}
             source={{ uri: url }}
+            injectedJavaScriptBeforeContentLoaded={title === 'Renovar receita' ? renewalWebCleanupScript : undefined}
+            injectedJavaScript={title === 'Renovar receita' ? renewalWebCleanupScript : undefined}
             style={styles.webView}
             startInLoadingState={false}
             onLoadStart={() => setLoadingWeb(true)}

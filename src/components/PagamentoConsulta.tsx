@@ -57,6 +57,7 @@ export default function PagamentoConsulta({
 
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
+  const modoReview = telefoneContato === '98991344646';
 
   async function garantirAtendimento() {
     if (atendimentoId) return atendimentoId;
@@ -284,6 +285,12 @@ export default function PagamentoConsulta({
       <View style={styles.stepBadge}><Text style={styles.stepBadgeText}>PAGAMENTO SEGURO</Text></View>
       <Text style={styles.title}>Finalize sua consulta</Text>
       <Text style={styles.lead}>Assim que o pagamento for confirmado, o app libera uma triagem rápida antes de entrar na fila médica.</Text>
+      {modoReview ? (
+        <View style={styles.patientCard}>
+          <Text style={styles.patientLabel}>AMBIENTE DE REVISÃO</Text>
+          <Text style={styles.patientHint}>PIX e cartão são demonstrativos. Nenhuma cobrança real será realizada.</Text>
+        </View>
+      ) : null}
 
       <View style={styles.patientCard}>
         <Text style={styles.patientLabel}>PACIENTE</Text>
@@ -328,14 +335,32 @@ export default function PagamentoConsulta({
                 <View style={styles.secureBadge}><Text style={styles.secureBadgeText}>TOKENIZADO</Text></View>
               </View>
               <Text style={styles.methodText}>Os dados sensíveis ficam dentro do ambiente de tokenização da Efí. O servidor recebe somente o token do cartão.</Text>
-              <EfiCardForm
-                key={cartaoFormKey}
-                holderName={pacienteLogado.nome}
-                holderDocument={pagadorCpf}
-                disabled={bloqueado}
-                onToken={processarTokenCartao}
-                onError={(message) => Alert.alert('Cartão', message)}
-              />
+              {modoReview ? (
+                <>
+                  <Text style={styles.methodText}>Para a revisão da App Store, use o cartão de teste abaixo. Nenhum dado real é necessário.</Text>
+                  <Pressable
+                    onPress={() => processarTokenCartao({
+                      paymentToken: 'APP_REVIEW_TEST_TOKEN',
+                      cardMask: '•••• 4242',
+                      holderName: pacienteLogado.nome || 'Apple Review Patient',
+                      holderDocument: pagadorCpf,
+                    })}
+                    disabled={bloqueado}
+                    style={[styles.primaryButton, bloqueado && { opacity: .65 }]}
+                  >
+                    {loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>Usar cartão de teste</Text>}
+                  </Pressable>
+                </>
+              ) : (
+                              <EfiCardForm
+                                key={cartaoFormKey}
+                                holderName={pacienteLogado.nome}
+                                holderDocument={pagadorCpf}
+                                disabled={bloqueado}
+                                onToken={processarTokenCartao}
+                                onError={(message) => Alert.alert('Cartão', message)}
+                              />
+                              )}
               {loading ? <View style={styles.inlineStatus}><ActivityIndicator color="#16c783" /><Text style={styles.statusText}>{status || 'Processando…'}</Text></View> : null}
             </View>
           )}
@@ -347,6 +372,7 @@ export default function PagamentoConsulta({
           <Text style={styles.pixEyebrow}>PAGAMENTO VIA PIX</Text>
           <Text style={styles.pixValue}>{formatarValor(valor)}</Text>
           <Text style={styles.pixInstruction}>Abra o app do seu banco e escaneie o QR Code ou copie o código abaixo.</Text>
+          {modoReview ? <Text style={styles.safeText}>QR Code demonstrativo para App Review. A confirmação acontece automaticamente e não gera cobrança.</Text> : null}
           <View style={styles.qrWrap}><QRCode value={pixCode} size={205} quietZone={10} /></View>
           <Pressable onPress={copiarPix} style={styles.copyButton}><Text style={styles.copyButtonText}>{copiado ? '✓ Código copiado' : 'Copiar código PIX'}</Text></Pressable>
           <View style={styles.codeBox}><Text numberOfLines={3} style={styles.codeText}>{pixCode}</Text></View>
