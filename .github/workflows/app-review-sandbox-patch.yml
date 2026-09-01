@@ -20,14 +20,12 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Apply review sandbox patch
-        run: node scripts/apply-app-review-sandbox.mjs
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - name: Apply project patches and typecheck
+        run: npm run typecheck
       - name: Commit patched app
         run: |
-          if git diff --quiet; then
-            echo "No patch changes needed"
+          if git diff --quiet -- App.tsx src/components/PagamentoConsulta.tsx; then
+            echo "No review sandbox changes needed"
             exit 0
           fi
           git config user.name "github-actions[bot]"
