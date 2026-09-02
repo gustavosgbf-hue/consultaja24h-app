@@ -973,6 +973,16 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable
+          onPress={confirmarExclusaoConta}
+          disabled={excluindoConta}
+          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+        >
+          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
+        </Pressable>
+
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -1265,8 +1275,8 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     return (
       <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
-        <Animated.View style={[{ flex: 1 }, stageStyle]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <Animated.View style={[{ flex: 1 }, stageStyle]}>
           <View style={styles.pageWrapFlex}>
             <PageHeader title="Triagem" onVoltar={voltarEtapa} />
             <ConsultaProgress current="triagem" />
@@ -1319,8 +1329,8 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
               </Pressable>
             </View>
           </View>
+          </Animated.View>
         </KeyboardAvoidingView>
-        </Animated.View>
       </SafeAreaView>
       </Animated.View>
     );
@@ -1835,7 +1845,7 @@ const styles = StyleSheet.create({
   renewalUpdatedHint: { color: themeColor('#71807a', '#75827e'), textAlign: 'center', fontSize: 11, marginTop: 8, marginBottom: 8 },
 
   pageWrap: { padding: 20, paddingBottom: 50 },
-  pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },
+  pageWrapFlex: { flex: 1, minHeight: 0, padding: 20, paddingBottom: 10 },
   consultaProgressWrap: { marginTop: -10, marginBottom: 20 },
   consultaProgressHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 },
   consultaProgressLabel: { color: themeColor('#34413d', '#dce7e2'), fontSize: 12, fontWeight: '800' },
@@ -1924,7 +1934,7 @@ const styles = StyleSheet.create({
   paidBadgeText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .7 },
   triageProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   triageProgressText: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 10.5, fontWeight: '900', letterSpacing: .8 },
-  triageChat: { flex: 1, marginTop: 2 },
+  triageChat: { flex: 1, minHeight: 0, marginTop: 2 },
   triageChatContent: { paddingBottom: 18, gap: 11 },
   patientBubble: { alignSelf: 'stretch', backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 17, padding: 15 },
   patientBubbleLabel: { color: themeColor('#0b8f61', '#78f25f'), fontSize: 9.5, fontWeight: '900', letterSpacing: .8, marginBottom: 6 },
@@ -1934,7 +1944,7 @@ const styles = StyleSheet.create({
   aiBubbleText: { color: '#26332f', lineHeight: 20, fontSize: 14 },
   userBubble: { alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: '#16c783', borderRadius: 17, borderBottomRightRadius: 5, paddingHorizontal: 14, paddingVertical: 11 },
   userBubbleText: { color: '#07100f', lineHeight: 19, fontSize: 14, fontWeight: '600' },
-  triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 12 },
+  triageComposer: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 10, paddingBottom: 2, backgroundColor: themeColor('#e8efeb', '#07100f') },
   triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: themeColor('#ffffff', '#101d1a'), borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
   sendButton: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
   sendButtonDisabled: { opacity: .35 },
