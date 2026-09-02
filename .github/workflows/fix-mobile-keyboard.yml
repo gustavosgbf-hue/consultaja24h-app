@@ -1,0 +1,115 @@
+name: Fix mobile keyboard and send key
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-mobile-keyboard.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Patch triage and patient chat keyboard behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('App.tsx')
+          s = app.read_text()
+          old = """<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>"""
+          new = """<KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >"""
+          if old not in s:
+              raise SystemExit('triage KeyboardAvoidingView snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """                style={styles.triageInput}
+                multiline
+                editable={!triagemLoading && !!perguntaAtual}
+                maxLength={700}
+              />"""
+          new = """                style={styles.triageInput}
+                multiline={false}
+                editable={!triagemLoading && !!perguntaAtual}
+                maxLength={700}
+                returnKeyType=\"send\"
+                blurOnSubmit={false}
+                onSubmitEditing={() => {
+                  if (!triagemLoading && respostaTriagem.trim()) enviarRespostaTriagem();
+                }}
+              />"""
+          if old not in s:
+              raise SystemExit('triage TextInput snippet not found')
+          s = s.replace(old, new, 1)
+          app.write_text(s)
+
+          chat = Path('src/components/ChatPaciente.tsx')
+          s = chat.read_text()
+          old = """<KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>"""
+          new = """<KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >"""
+          if old not in s:
+              raise SystemExit('chat KeyboardAvoidingView snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """                style={styles.input}
+                multiline
+                maxLength={3000}
+                editable={!enviando}
+                returnKeyType=\"send\"
+                submitBehavior=\"submit\"
+                onSubmitEditing={enviar}
+              />"""
+          new = """                style={styles.input}
+                multiline={false}
+                maxLength={3000}
+                editable={!enviando}
+                returnKeyType=\"send\"
+                blurOnSubmit={false}
+                submitBehavior=\"submit\"
+                onSubmitEditing={enviar}
+              />"""
+          if old not in s:
+              raise SystemExit('chat TextInput snippet not found')
+          s = s.replace(old, new, 1)
+          chat.write_text(s)
+          PY
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx src/components/ChatPaciente.tsx
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+          else
+            git commit -m "Fix mobile keyboard visibility and send key"
+            git push
+          fi
+
+      - name: Publish OTA to production
+        if: env.EXPO_TOKEN != ''
+        run: npx eas-cli@latest update --channel production --message "Fix keyboard visibility and send key" --non-interactive
