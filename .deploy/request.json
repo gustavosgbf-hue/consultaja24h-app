@@ -1,5 +1,5 @@
 {
-  "action": "submit_testflight",
-  "message": "Submit iOS build 7 for App Review",
-  "requested_at": "2026-09-01T22:00:00-03:00"
+  "action": "android_build",
+  "message": "Build Android with review sandbox and app icon",
+  "requested_at": "2026-09-01T22:35:00-03:00"
 }
