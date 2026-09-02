@@ -158,8 +158,15 @@ async function authenticatedFetch<T>(path: string): Promise<T> {
   const token = await getSessionToken();
   if (!token) throw new Error('Sessão não encontrada');
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const separator = path.includes('?') ? '&' : '?';
+  const url = `${API_BASE_URL}${path}${separator}_ts=${Date.now()}`;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache, no-store, max-age=0',
+      Pragma: 'no-cache',
+    },
   });
 
   if (response.status === 401) throw new Error('Sessão expirada');
@@ -168,6 +175,14 @@ async function authenticatedFetch<T>(path: string): Promise<T> {
 
 export async function carregarPaciente() {
   return authenticatedFetch<{ ok: boolean; paciente: Paciente }>('/api/paciente/me');
+}
+
+export async function completarPerfilPaciente(nome: string, dataNascimento: string) {
+  return postJson<{ ok: boolean; paciente: Paciente }>(
+    '/api/paciente/perfil-completar',
+    { nome, data_nascimento: dataNascimento },
+    true,
+  );
 }
 
 export async function carregarAgendamentos() {
@@ -304,12 +319,18 @@ export async function vincularPixAoAtendimento(atendimentoId: number, orderId: s
 }
 
 export async function consultarStatusPix(orderId: string) {
-  const response = await fetch(`${API_BASE_URL}/api/pagbank/order/${encodeURIComponent(orderId)}`);
+  const response = await fetch(`${API_BASE_URL}/api/pagbank/order/${encodeURIComponent(orderId)}?_ts=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
+  });
   return parseJson<StatusPagBankResponse>(response);
 }
 
 export async function consultarStatusAtendimento(atendimentoId: number) {
-  const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}`);
+  const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}?_ts=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
+  });
   return parseJson<{
     ok: boolean;
     atendimento?: {
@@ -356,5 +377,14 @@ export async function carregarRenovacoesPaciente() {
 export async function carregarRenovacaoPaciente(id: number) {
   return authenticatedFetch<{ ok: boolean; renovacao: RenovacaoPaciente }>(
     '/api/paciente/renovacao/' + encodeURIComponent(String(id)),
+  );
+}
+
+
+export async function solicitarExclusaoConta() {
+  return postJson<{ ok: boolean; message?: string }>(
+    '/api/paciente/exclusao-conta',
+    {},
+    true,
   );
 }
