@@ -72,8 +72,6 @@ jobs:
               raise SystemExit('triage wrapper end not found')
           s = s.replace(old_end, new_end, 1)
 
-          # Keep the composer anchored inside the resized keyboard-safe viewport,
-          # and give the chat area room to shrink instead of pushing the composer below the keyboard.
           s = s.replace(
               "  pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },",
               "  pageWrapFlex: { flex: 1, minHeight: 0, padding: 20, paddingBottom: 10 },",
@@ -107,3 +105,5 @@ jobs:
       - name: Publish production OTA
         if: env.EXPO_TOKEN != ''
         run: npx eas-cli@latest update --channel production --message "Fix triage composer above keyboard" --non-interactive
+
+# trigger: 2026-09-02T18:31:00-03:00
