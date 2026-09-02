@@ -82,9 +82,11 @@ jobs:
           npx expo install --fix
           npx expo-doctor
 
-      - name: Apply active consultation resume fix
+      - name: Apply OTA patches
         if: ${{ steps.request.outputs.action == 'ota' }}
-        run: node scripts/fix-home-resume.mjs
+        run: |
+          node scripts/fix-home-resume.mjs
+          node scripts/fix-triage-keyboard-layout.mjs
 
       - name: Apply final release patches
         if: ${{ steps.request.outputs.action == 'finalize_release' }}
@@ -100,12 +102,12 @@ jobs:
         if: ${{ steps.request.outputs.action == 'ota' }}
         run: |
           if git diff --quiet -- App.tsx; then
-            echo "Resume patch já estava aplicado."
+            echo "OTA patches já estavam aplicados."
           else
             git config user.name "consultaja24h-deploy"
             git config user.email "actions@users.noreply.github.com"
             git add App.tsx
-            git commit -m "Show and resume active consultation from home"
+            git commit -m "Apply OTA consultation UX fixes"
             git push origin HEAD:main
           fi
 
