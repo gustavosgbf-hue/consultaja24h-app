@@ -35,4 +35,4 @@ jobs:
           fi
 
       - name: Publish OTA to production
-        run: npx eas-cli@latest update --channel production --message "Patient history, documents, replies and read receipts" --non-interactive
+        run: npx eas-cli@latest update --channel production --message "Fix keyboard visibility and send key" --non-interactive
