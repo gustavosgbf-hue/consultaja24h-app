@@ -20,16 +20,75 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Apply project patches and typecheck
+      - name: Fix keyboard and send key
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('App.tsx')
+          s = app.read_text()
+          s = s.replace(
+              "<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>",
+              "<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>",
+              1,
+          )
+          old = """                style={styles.triageInput}
+                multiline
+                editable={!triagemLoading && !!perguntaAtual}
+                maxLength={700}
+              />"""
+          new = """                style={styles.triageInput}
+                multiline={false}
+                editable={!triagemLoading && !!perguntaAtual}
+                maxLength={700}
+                returnKeyType=\"send\"
+                blurOnSubmit={false}
+                onSubmitEditing={() => {
+                  if (!triagemLoading && respostaTriagem.trim()) enviarRespostaTriagem();
+                }}
+              />"""
+          if old not in s:
+              raise SystemExit('triage input snippet not found')
+          app.write_text(s.replace(old, new, 1))
+
+          chat = Path('src/components/ChatPaciente.tsx')
+          s = chat.read_text()
+          s = s.replace(
+              "<KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>",
+              "<KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>",
+              1,
+          )
+          old = """                style={styles.input}
+                multiline
+                maxLength={3000}
+                editable={!enviando}
+                returnKeyType=\"send\"
+                submitBehavior=\"submit\"
+                onSubmitEditing={enviar}
+              />"""
+          new = """                style={styles.input}
+                multiline={false}
+                maxLength={3000}
+                editable={!enviando}
+                returnKeyType=\"send\"
+                blurOnSubmit={false}
+                submitBehavior=\"submit\"
+                onSubmitEditing={enviar}
+              />"""
+          if old not in s:
+              raise SystemExit('chat input snippet not found')
+          chat.write_text(s.replace(old, new, 1))
+          PY
+      - name: Typecheck
         run: npm run typecheck
       - name: Commit patched app
         run: |
-          if git diff --quiet -- App.tsx src/components/PagamentoConsulta.tsx; then
-            echo "No review sandbox changes needed"
+          if git diff --quiet -- App.tsx src/components/ChatPaciente.tsx; then
+            echo "No keyboard changes needed"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add App.tsx src/components/PagamentoConsulta.tsx
-          git commit -m "Enable isolated App Review payment sandbox"
+          git add App.tsx src/components/ChatPaciente.tsx
+          git commit -m "Fix keyboard visibility and send key"
           git push
