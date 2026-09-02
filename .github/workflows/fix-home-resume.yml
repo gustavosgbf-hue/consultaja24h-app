@@ -167,7 +167,7 @@ jobs:
     setAtendimentoPagoId(atendimentoInicial.id);
     if (atendimentoInicial.nome) setNomeProprio(String(atendimentoInicial.nome));
     const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
-    if (queixaSalva && !/^\(.*(pagamento|review|demonstra).*(\)$/i.test(queixaSalva)) setQueixa(queixaSalva);
+    if (queixaSalva && !queixaSalva.startsWith('(')) setQueixa(queixaSalva);
 
     if (atendimentoInicial.etapa === 'pagamento') {
       setEtapaConsulta('pagamento');
@@ -212,3 +212,5 @@ jobs:
       - name: Publish OTA
         if: env.EXPO_TOKEN != ''
         run: npx eas-cli@latest update --channel production --message "Fix active consultation resume from home" --non-interactive
+
+# retrigger 2026-09-02
