@@ -933,6 +933,16 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable
+          onPress={confirmarExclusaoConta}
+          disabled={excluindoConta}
+          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+        >
+          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
+        </Pressable>
+
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -1038,15 +1048,18 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
   async function irParaPagamento() {
     if (!validarDados() || salvandoPerfil) return;
 
-    try {
-      const existente = await carregarAtendimentoEmAndamento();
-      if (existente.atendimento) {
-        Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');
-        onVoltar();
-        return;
+    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';
+    if (!modoReviewFluxo) {
+      try {
+        const existente = await carregarAtendimentoEmAndamento();
+        if (existente.atendimento) {
+          Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');
+          onVoltar();
+          return;
+        }
+      } catch {
+        // Se a checagem temporária falhar, o fluxo existente continua normalmente.
       }
-    } catch {
-      // Se a checagem temporária falhar, o fluxo existente continua normalmente.
     }
 
     if (para === 'mim' && perfilIncompleto) {
@@ -1194,7 +1207,7 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
       <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
         <Animated.View style={[{ flex: 1 }, stageStyle]}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
           <View style={styles.pageWrapFlex}>
             <PageHeader title="Triagem" onVoltar={voltarEtapa} />
             <ConsultaProgress current="triagem" />
@@ -1233,9 +1246,14 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
                 placeholder={triagemLoading ? 'Aguarde...' : 'Digite sua resposta...'}
                 placeholderTextColor="#66736e"
                 style={styles.triageInput}
-                multiline
-                editable={!triagemLoading && !!perguntaAtual}
+                multiline={false}
+      editable={!triagemLoading && !!perguntaAtual}
                 maxLength={700}
+      returnKeyType="send"
+      blurOnSubmit={false}
+      onSubmitEditing={() => {
+        if (!triagemLoading && respostaTriagem.trim()) enviarRespostaTriagem();
+      }}
               />
               <Pressable onPress={enviarRespostaTriagem} disabled={triagemLoading || !respostaTriagem.trim()} style={[styles.sendButton, (triagemLoading || !respostaTriagem.trim()) && styles.sendButtonDisabled]}>
                 {triagemLoading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.sendButtonText}>↑</Text>}

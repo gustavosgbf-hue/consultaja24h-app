@@ -538,7 +538,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={styles.header}>
           <Pressable onPress={onVoltar} style={styles.backButton} accessibilityLabel="Voltar"><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerCenter}>
@@ -625,10 +625,11 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
                 placeholder="Escreva uma mensagem..."
                 placeholderTextColor="#6f7d78"
                 style={styles.input}
-                multiline
-                maxLength={3000}
+                multiline={false}
+      maxLength={3000}
                 editable={!enviando}
                 returnKeyType="send"
+      blurOnSubmit={false}
                 submitBehavior="submit"
                 onSubmitEditing={enviar}
               />
