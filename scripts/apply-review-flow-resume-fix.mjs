@@ -11,15 +11,29 @@ function patch(path, transform) {
   console.log(`[review-flow] updated ${path}`);
 }
 
+patch('App.tsx', (src) => {
+  if (src.includes("const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';")) return src;
+
+  const oldBlock = `    try {\n      const existente = await carregarAtendimentoEmAndamento();\n      if (existente.atendimento) {\n        Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');\n        onVoltar();\n        return;\n      }\n    } catch {\n      // Se a checagem temporária falhar, o fluxo existente continua normalmente.\n    }\n`;
+
+  if (!src.includes(oldBlock)) throw new Error('App.tsx review resume marker not found');
+
+  return src.replace(oldBlock, `    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';\n    if (!modoReviewFluxo) {\n      try {\n        const existente = await carregarAtendimentoEmAndamento();\n        if (existente.atendimento) {\n          Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');\n          onVoltar();\n          return;\n        }\n      } catch {\n        // Se a checagem temporária falhar, o fluxo existente continua normalmente.\n      }\n    }\n`);
+});
+
 patch('src/AppRoot.tsx', (src) => {
   let out = src;
 
   out = out.replace(
     `  const betaEmTriagem = atendimento?.etapa === 'triagem' && atendimento.pagamento_metodo === 'beta_test';`,
-    `  // Durante pagamento/triagem do ambiente de review, o fluxo local da NovaConsulta\n  // precisa permanecer montado. Caso o AppRoot intercepte a consulta nessa fase,\n  // ele desmonta PagamentoConsulta e o polling de confirmação, deixando o usuário\n  // preso em \"Pagamento pendente\". Só assumimos a navegação global quando o\n  // sandbox chegar ao chat.\n  const betaEmFluxoLocal = atendimento?.pagamento_metodo === 'beta_test' &&\n    (atendimento.etapa === 'pagamento' || atendimento.etapa === 'triagem');`,
+    `  const betaEmFluxoLocal = atendimento?.pagamento_metodo === 'beta_test' &&\n    (atendimento.etapa === 'pagamento' || atendimento.etapa === 'triagem');`,
   );
-
-  out = out.replace(/!betaEmTriagem/g, '!betaEmFluxoLocal');
+  out = out.replace(
+    `  const betaFluxoLocal = atendimento?.pagamento_metodo === 'beta_test' && (atendimento.etapa === 'pagamento' || atendimento.etapa === 'triagem');`,
+    `  const betaEmFluxoLocal = atendimento?.pagamento_metodo === 'beta_test' &&\n    (atendimento.etapa === 'pagamento' || atendimento.etapa === 'triagem');`,
+  );
+  out = out.replace(/betaEmTriagem/g, 'betaEmFluxoLocal');
+  out = out.replace(/betaFluxoLocal/g, 'betaEmFluxoLocal');
   return out;
 });
 
