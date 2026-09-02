@@ -1,0 +1,105 @@
+name: Fix review flow cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-review-cache.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Disable stale GET caching in dynamic consultation flow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/api/client.ts')
+          s = p.read_text()
+
+          old = """async function authenticatedFetch<T>(path: string): Promise<T> {
+  const token = await getSessionToken();
+  if (!token) throw new Error('Sessão não encontrada');
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (response.status === 401) throw new Error('Sessão expirada');
+  return parseJson<T>(response);
+}"""
+          new = """async function authenticatedFetch<T>(path: string): Promise<T> {
+  const token = await getSessionToken();
+  if (!token) throw new Error('Sessão não encontrada');
+
+  const separator = path.includes('?') ? '&' : '?';
+  const url = `${API_BASE_URL}${path}${separator}_ts=${Date.now()}`;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache, no-store, max-age=0',
+      Pragma: 'no-cache',
+    },
+  });
+
+  if (response.status === 401) throw new Error('Sessão expirada');
+  return parseJson<T>(response);
+}"""
+          if old not in s:
+              raise SystemExit('authenticatedFetch snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """export async function consultarStatusPix(orderId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/pagbank/order/${encodeURIComponent(orderId)}`);
+  return parseJson<StatusPagBankResponse>(response);
+}"""
+          new = """export async function consultarStatusPix(orderId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/pagbank/order/${encodeURIComponent(orderId)}?_ts=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
+  });
+  return parseJson<StatusPagBankResponse>(response);
+}"""
+          if old not in s:
+              raise SystemExit('consultarStatusPix snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """export async function consultarStatusAtendimento(atendimentoId: number) {
+  const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}`);"""
+          new = """export async function consultarStatusAtendimento(atendimentoId: number) {
+  const response = await fetch(`${API_BASE_URL}/api/atendimento/status/${atendimentoId}?_ts=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
+  });"""
+          if old not in s:
+              raise SystemExit('consultarStatusAtendimento snippet not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+      - run: npm run typecheck
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/api/client.ts
+          git commit -m "Prevent stale consultation status cache" || exit 0
+          git push
+      - name: Publish OTA
+        if: env.EXPO_TOKEN != ''
+        run: npx eas-cli@latest update --channel production --message "Fix stale review consultation status" --non-interactive
