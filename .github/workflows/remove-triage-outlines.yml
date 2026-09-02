@@ -1,0 +1,50 @@
+name: Remove triage outlines
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/remove-triage-outlines.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Remove white outlines from triage
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('App.tsx')
+          s = p.read_text()
+          s = s.replace("patientBubble: { alignSelf: 'stretch', backgroundColor: themeColor('#eef7f1', '#10201d'), borderWidth: 1, borderColor: themeColor('#cbe2d7', '#21483c'), borderRadius: 17, padding: 15 },",
+                        "patientBubble: { alignSelf: 'stretch', backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 17, padding: 15 },")
+          s = s.replace("triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, borderTopWidth: 1, borderTopColor: themeColor('#dce6e1', '#1d342f'), paddingTop: 12 },",
+                        "triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 12 },")
+          s = s.replace("triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: themeColor('#ffffff', '#101d1a'), borderWidth: 1, borderColor: themeColor('#d8e3dd', '#223a34'), borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },",
+                        "triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: themeColor('#ffffff', '#101d1a'), borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },")
+          p.write_text(s)
+          PY
+      - run: npm run typecheck
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx
+          git commit -m "Remove white outlines from triage" || exit 0
+          git push
+      - name: Publish OTA
+        if: env.EXPO_TOKEN != ''
+        run: npx eas-cli@latest update --channel production --message "Remove triage outlines" --non-interactive
