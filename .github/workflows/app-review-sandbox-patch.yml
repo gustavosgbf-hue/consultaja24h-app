@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           app = Path('App.tsx')
           s = app.read_text()
@@ -32,24 +33,18 @@ jobs:
               "<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>",
               1,
           )
-          old = """                style={styles.triageInput}
-                multiline
-                editable={!triagemLoading && !!perguntaAtual}
-                maxLength={700}
-              />"""
-          new = """                style={styles.triageInput}
-                multiline={false}
-                editable={!triagemLoading && !!perguntaAtual}
-                maxLength={700}
-                returnKeyType=\"send\"
+          pattern = r"(style=\{styles\.triageInput\}\s*)multiline\s*(editable=\{!triagemLoading && !!perguntaAtual\}\s*maxLength=\{700\})"
+          repl = r'''\1multiline={false}
+                \2
+                returnKeyType="send"
                 blurOnSubmit={false}
                 onSubmitEditing={() => {
                   if (!triagemLoading && respostaTriagem.trim()) enviarRespostaTriagem();
-                }}
-              />"""
-          if old not in s:
-              raise SystemExit('triage input snippet not found')
-          app.write_text(s.replace(old, new, 1))
+                }}'''
+          s, n = re.subn(pattern, repl, s, count=1)
+          if n != 1:
+              raise SystemExit('triage input patch not applied')
+          app.write_text(s)
 
           chat = Path('src/components/ChatPaciente.tsx')
           s = chat.read_text()
@@ -58,26 +53,14 @@ jobs:
               "<KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>",
               1,
           )
-          old = """                style={styles.input}
-                multiline
-                maxLength={3000}
-                editable={!enviando}
-                returnKeyType=\"send\"
-                submitBehavior=\"submit\"
-                onSubmitEditing={enviar}
-              />"""
-          new = """                style={styles.input}
-                multiline={false}
-                maxLength={3000}
-                editable={!enviando}
-                returnKeyType=\"send\"
-                blurOnSubmit={false}
-                submitBehavior=\"submit\"
-                onSubmitEditing={enviar}
-              />"""
-          if old not in s:
-              raise SystemExit('chat input snippet not found')
-          chat.write_text(s.replace(old, new, 1))
+          pattern = r"(style=\{styles\.input\}\s*)multiline\s*(maxLength=\{3000\}\s*editable=\{!enviando\}\s*returnKeyType=\"send\")"
+          repl = r'''\1multiline={false}
+                \2
+                blurOnSubmit={false}'''
+          s, n = re.subn(pattern, repl, s, count=1)
+          if n != 1:
+              raise SystemExit('chat input patch not applied')
+          chat.write_text(s)
           PY
       - name: Typecheck
         run: npm run typecheck
