@@ -1,5 +1,5 @@
 {
   "action": "ota",
-  "message": "Fix review consultation restart flow and resume handling",
-  "requested_at": "2026-09-02T09:31:00-03:00"
+  "message": "Fix active consultation resume from home",
+  "requested_at": "2026-09-02T18:31:00-03:00"
 }
