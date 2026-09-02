@@ -75,6 +75,13 @@ jobs:
         if: ${{ steps.request.outputs.action != 'none' }}
         run: npm ci
 
+      - name: Align Expo dependencies for Android build
+        if: ${{ steps.request.outputs.action == 'android_build' }}
+        run: |
+          npx expo install expo-asset
+          npx expo install --fix
+          npx expo-doctor
+
       - name: Apply final release patches
         if: ${{ steps.request.outputs.action == 'finalize_release' }}
         run: |
