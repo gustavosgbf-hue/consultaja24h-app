@@ -1,0 +1,109 @@
+name: Fix triage keyboard layout v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-triage-keyboard-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+
+      - name: Make triage keyboard layout match working patient chat
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('App.tsx')
+          s = p.read_text()
+
+          old_start = '''      <Animated.View style={motion.style}>
+      <SafeAreaView style={styles.safe}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <View style={styles.pageWrapFlex}>'''
+
+          new_start = '''      <Animated.View style={motion.style}>
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+          <Animated.View style={[{ flex: 1 }, stageStyle]}>
+          <View style={styles.pageWrapFlex}>'''
+
+          if old_start not in s:
+              raise SystemExit('triage wrapper start not found')
+          s = s.replace(old_start, new_start, 1)
+
+          old_end = '''          </View>
+        </KeyboardAvoidingView>
+        </Animated.View>
+      </SafeAreaView>
+      </Animated.View>
+    );
+  }
+
+  if (etapaConsulta === 'fila') {'''
+
+          new_end = '''          </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+      </Animated.View>
+    );
+  }
+
+  if (etapaConsulta === 'fila') {'''
+
+          if old_end not in s:
+              raise SystemExit('triage wrapper end not found')
+          s = s.replace(old_end, new_end, 1)
+
+          # Keep the composer anchored inside the resized keyboard-safe viewport,
+          # and give the chat area room to shrink instead of pushing the composer below the keyboard.
+          s = s.replace(
+              "  pageWrapFlex: { flex: 1, padding: 20, paddingBottom: 14 },",
+              "  pageWrapFlex: { flex: 1, minHeight: 0, padding: 20, paddingBottom: 10 },",
+              1,
+          )
+          s = s.replace(
+              "  triageChat: { flex: 1, marginTop: 2 },",
+              "  triageChat: { flex: 1, minHeight: 0, marginTop: 2 },",
+              1,
+          )
+          s = s.replace(
+              "  triageComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 12 },",
+              "  triageComposer: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 10, paddingBottom: 2, backgroundColor: themeColor('#e8efeb', '#07100f') },",
+              1,
+          )
+
+          p.write_text(s)
+          PY
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx
+          git commit -m "Fix triage composer above mobile keyboard" || true
+          git push
+
+      - name: Publish production OTA
+        if: env.EXPO_TOKEN != ''
+        run: npx eas-cli@latest update --channel production --message "Fix triage composer above keyboard" --non-interactive
