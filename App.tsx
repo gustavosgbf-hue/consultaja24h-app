@@ -38,6 +38,7 @@ import {
   verificarOtpPaciente,
   type RenovacaoPaciente,
   type TriageMessage,
+  type AtendimentoEmAndamento,
 } from './src/api/client';
 import {
   clearSessionToken,
@@ -234,6 +235,8 @@ export default function App() {
   const [historicoOrigem, setHistoricoOrigem] = useState<'home' | 'documentos'>('home');
   const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
   const [webPage, setWebPage] = useState<{ title: string; url: string } | null>(null);
+  const [atendimentoEmAndamento, setAtendimentoEmAndamento] = useState<AtendimentoEmAndamento | null>(null);
+  const [retomarAtendimento, setRetomarAtendimento] = useState<AtendimentoEmAndamento | null>(null);
   const homeScrollOffsetRef = useRef(0);
 
   useEffect(() => {
@@ -286,17 +289,19 @@ export default function App() {
       if (!me?.paciente) return;
       setPaciente(me.paciente);
 
-      const [agenda, history, docs, renewalData] = await Promise.all([
+      const [agenda, history, docs, renewalData, activeData] = await Promise.all([
         comRetry(carregarAgendamentos),
         comRetry(carregarHistoricoPaciente),
         comRetry(carregarDocumentosPaciente),
         comRetry(carregarRenovacoesPaciente),
+        comRetry(carregarAtendimentoEmAndamento),
       ]);
 
       if (agenda) setAgendamentos(agenda.agendamentos || []);
       if (history) setHistorico(history.atendimentos || []);
       if (docs) setDocumentos(docs.documentos || []);
       if (renewalData) setRenovacoes(renewalData.renovacoes || []);
+      setAtendimentoEmAndamento(activeData?.atendimento || null);
     } finally {
       setHomeLoading(false);
     }
@@ -497,7 +502,7 @@ export default function App() {
   }
 
   if (tela === 'nova-consulta') {
-    return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} onPerfilAtualizado={setPaciente} />;
+    return <NovaConsulta paciente={paciente} atendimentoInicial={retomarAtendimento} onVoltar={() => { setRetomarAtendimento(null); setTela('home'); carregarHome(); }} onPerfilAtualizado={setPaciente} />;
   }
 
   if (tela === 'documentos') {
@@ -533,6 +538,7 @@ export default function App() {
       paciente={paciente}
       agendamentos={agendamentos}
       historico={historico}
+      atendimentoEmAndamento={atendimentoEmAndamento}
       documentos={documentos}
       renovacoes={renovacoes}
       loading={homeLoading}
@@ -542,7 +548,8 @@ export default function App() {
       onMostrarTudo={() => setMostrarHistoricoCompleto((valor) => !valor)}
       onAtualizar={carregarHome}
       onPerfil={() => setTela('perfil')}
-      onNovaConsulta={() => setTela('nova-consulta')}
+      onNovaConsulta={() => { setRetomarAtendimento(null); setTela('nova-consulta'); }}
+      onRetomarAtendimento={(item) => { setRetomarAtendimento(item); setTela('nova-consulta'); }}
       onDocumentos={() => setTela('documentos')}
       onRenovacao={() => { setWebPage({ title: 'Renovar receita', url: URL_RENOVACAO }); setTela('web'); }}
       onEspecialistas={() => setTela('servicos')}
@@ -553,10 +560,11 @@ export default function App() {
   );
 }
 
-function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoes, loading, initialScrollOffset, onScrollOffset, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
+function PacienteHome({ paciente, agendamentos, historico, atendimentoEmAndamento, documentos, renovacoes, loading, initialScrollOffset, onScrollOffset, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onRetomarAtendimento, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
   paciente: Paciente;
   agendamentos: Agendamento[];
   historico: AtendimentoHistorico[];
+  atendimentoEmAndamento: AtendimentoEmAndamento | null;
   documentos: DocumentoPaciente[];
   renovacoes: RenovacaoPaciente[];
   loading: boolean;
@@ -567,6 +575,7 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
   onAtualizar: () => void;
   onPerfil: () => void;
   onNovaConsulta: () => void;
+  onRetomarAtendimento: (item: AtendimentoEmAndamento) => void;
   onDocumentos: () => void;
   onRenovacao: () => void;
   onEspecialistas: () => void;
@@ -576,7 +585,8 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
 }) {
   const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
   const historicoConsultas = historico.filter((item) => !String(item.tipo || '').toLowerCase().startsWith('renovacao_'));
-  const atendimentoAtivo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
+  const atendimentoAtivoHistorico = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
+  const atendimentoAtivo = atendimentoEmAndamento || atendimentoAtivoHistorico || null;
   const historicoFinalizados = historicoConsultas.filter((item) => atendimentoConcluido(item.status));
   const ultimo = historicoFinalizados[0] || null;
   const itensHistorico = mostrarTudo ? historicoFinalizados : historicoFinalizados.slice(0, 4);
@@ -611,11 +621,11 @@ function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoe
         </View>
 
         {atendimentoAtivo ? (
-          <Pressable onPress={() => onAbrirAtendimento(atendimentoAtivo)} style={({ pressed }) => [styles.activeCareCard, pressed && styles.primaryPressed]}>
+          <Pressable onPress={() => atendimentoEmAndamento ? onRetomarAtendimento(atendimentoEmAndamento) : onAbrirAtendimento(atendimentoAtivo as AtendimentoHistorico)} style={({ pressed }) => [styles.activeCareCard, pressed && styles.primaryPressed]}>
             <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.activeCareEyebrow}>ATENDIMENTO EM ANDAMENTO</Text></View>
             <Text style={styles.activeCareTitle}>Continuar atendimento</Text>
-            <Text style={styles.activeCareText}>{atendimentoAtivo.medico_nome ? 'Voltar para a conversa com ' + atendimentoAtivo.medico_nome + '.' : 'Voltar para a conversa com o médico.'}</Text>
-            <Text style={styles.activeCareAction}>Abrir conversa ›</Text>
+            <Text style={styles.activeCareText}>{atendimentoEmAndamento?.etapa === 'pagamento' ? 'Seu pagamento ainda precisa ser concluído.' : atendimentoEmAndamento?.etapa === 'triagem' ? 'Pagamento confirmado. Continue sua triagem.' : atendimentoEmAndamento?.etapa === 'fila' ? 'Sua triagem foi concluída. Continue acompanhando o atendimento.' : atendimentoAtivo.medico_nome ? 'Voltar para a conversa com ' + atendimentoAtivo.medico_nome + '.' : 'Retome de onde você parou.'}</Text>
+            <Text style={styles.activeCareAction}>Continuar ›</Text>
           </Pressable>
         ) : null}
 
@@ -953,6 +963,16 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable
+          onPress={confirmarExclusaoConta}
+          disabled={excluindoConta}
+          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+        >
+          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
+        </Pressable>
+
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -960,7 +980,7 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
   );
 }
 
-function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Paciente; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {
+function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualizado }: { paciente: Paciente; atendimentoInicial?: AtendimentoEmAndamento | null; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {
   const [para, setPara] = useState<AtendimentoPara>('mim');
   const [etapaConsulta, setEtapaConsulta] = useState<EtapaConsulta>('dados');
   const [nomeOutro, setNomeOutro] = useState('');
@@ -1019,6 +1039,35 @@ function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Pa
   const pacienteCpfSelecionado = para === 'outra-pessoa' ? digits(cpfOutro) : digits(paciente.cpf);
   const pacienteNascimentoSelecionado = para === 'outra-pessoa' ? nascimentoOutro.trim() : (perfilIncompleto ? nascimentoProprio.trim() : (paciente.data_nascimento || undefined));
   const telefoneContato = digits(paciente.tel);
+
+  useEffect(() => {
+    if (!atendimentoInicial?.id) return;
+    setAtendimentoPagoId(atendimentoInicial.id);
+    const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
+    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') ? queixaSalva : 'Queixa informada anteriormente';
+    setQueixa(queixaBase);
+
+    if (atendimentoInicial.etapa === 'pagamento') {
+      setEtapaConsulta('pagamento');
+      return;
+    }
+    if (atendimentoInicial.etapa === 'fila' || atendimentoInicial.etapa === 'chat') {
+      setEtapaConsulta('fila');
+      return;
+    }
+    if (atendimentoInicial.etapa === 'triagem') {
+      const history: TriageMessage[] = [{ role: 'user', content: `Queixa inicial informada pelo paciente: ${queixaBase}` }];
+      setTriageMessages(history);
+      setPerguntaAtual('');
+      setRespostaTriagem('');
+      setEtapaConsulta('triagem');
+      setTriagemLoading(true);
+      conversarTriagem(SYSTEM_TRIAGE, history)
+        .then((data) => tratarRetornoTriagem(data.text, history, atendimentoInicial.id))
+        .catch(() => Alert.alert('Triagem', 'Não foi possível retomar a triagem agora. Tente novamente em instantes.'))
+        .finally(() => setTriagemLoading(false));
+    }
+  }, [atendimentoInicial?.id]);
 
   function validarDados() {
     if (para === 'outra-pessoa') {
