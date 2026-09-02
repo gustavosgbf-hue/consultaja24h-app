@@ -3,12 +3,14 @@
     "name": "ConsultaJá24h",
     "slug": "consultaja24h",
     "version": "1.0.1",
+    "icon": "./icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.consultaja24h.app",
       "buildNumber": "5",
+      "icon": "./icon-1024.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
