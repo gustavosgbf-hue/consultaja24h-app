@@ -1,5 +1,5 @@
 {
   "action": "android_build",
-  "message": "Build Android with review sandbox and app icon",
-  "requested_at": "2026-09-01T22:35:00-03:00"
+  "message": "Retry Android production build after Expo dependency alignment",
+  "requested_at": "2026-09-01T22:53:00-03:00"
 }
