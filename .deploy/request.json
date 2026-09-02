@@ -1,5 +1,5 @@
 {
-  "action": "android_build",
-  "message": "Retry Android production build after Expo dependency alignment",
-  "requested_at": "2026-09-01T22:53:00-03:00"
+  "action": "ota",
+  "message": "Fix review payment resume flow and neutral review labels",
+  "requested_at": "2026-09-02T07:45:00-03:00"
 }
