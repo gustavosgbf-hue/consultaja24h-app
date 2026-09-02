@@ -1,0 +1,214 @@
+name: Fix home resume flow
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-home-resume.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Patch home resume handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('App.tsx')
+          s = p.read_text()
+
+          s = s.replace(
+              "  type RenovacaoPaciente,\n  type TriageMessage,\n} from './src/api/client';",
+              "  type RenovacaoPaciente,\n  type TriageMessage,\n  type AtendimentoEmAndamento,\n} from './src/api/client';",
+              1,
+          )
+
+          s = s.replace(
+              "  const [webPage, setWebPage] = useState<{ title: string; url: string } | null>(null);\n  const homeScrollOffsetRef = useRef(0);",
+              "  const [webPage, setWebPage] = useState<{ title: string; url: string } | null>(null);\n  const [atendimentoEmAndamento, setAtendimentoEmAndamento] = useState<AtendimentoEmAndamento | null>(null);\n  const [retomarAtendimento, setRetomarAtendimento] = useState<AtendimentoEmAndamento | null>(null);\n  const homeScrollOffsetRef = useRef(0);",
+              1,
+          )
+
+          old = """      const [agenda, history, docs, renewalData] = await Promise.all([
+        comRetry(carregarAgendamentos),
+        comRetry(carregarHistoricoPaciente),
+        comRetry(carregarDocumentosPaciente),
+        comRetry(carregarRenovacoesPaciente),
+      ]);
+
+      if (agenda) setAgendamentos(agenda.agendamentos || []);
+      if (history) setHistorico(history.atendimentos || []);
+      if (docs) setDocumentos(docs.documentos || []);
+      if (renewalData) setRenovacoes(renewalData.renovacoes || []);"""
+          new = """      const [agenda, history, docs, renewalData, activeData] = await Promise.all([
+        comRetry(carregarAgendamentos),
+        comRetry(carregarHistoricoPaciente),
+        comRetry(carregarDocumentosPaciente),
+        comRetry(carregarRenovacoesPaciente),
+        comRetry(carregarAtendimentoEmAndamento),
+      ]);
+
+      if (agenda) setAgendamentos(agenda.agendamentos || []);
+      if (history) setHistorico(history.atendimentos || []);
+      if (docs) setDocumentos(docs.documentos || []);
+      if (renewalData) setRenovacoes(renewalData.renovacoes || []);
+      setAtendimentoEmAndamento(activeData?.atendimento || null);"""
+          if old not in s:
+              raise SystemExit('carregarHome snippet not found')
+          s = s.replace(old, new, 1)
+
+          s = s.replace(
+              "    setRenovacaoSelecionada(null);\n    setHistoricoSelecionado(null);",
+              "    setRenovacaoSelecionada(null);\n    setHistoricoSelecionado(null);\n    setAtendimentoEmAndamento(null);\n    setRetomarAtendimento(null);",
+              1,
+          )
+
+          old = """  if (tela === 'nova-consulta') {
+    return <NovaConsulta paciente={paciente} onVoltar={() => setTela('home')} onPerfilAtualizado={setPaciente} />;
+  }"""
+          new = """  if (tela === 'nova-consulta') {
+    return <NovaConsulta paciente={paciente} atendimentoInicial={retomarAtendimento} onVoltar={() => { setRetomarAtendimento(null); setTela('home'); carregarHome(); }} onPerfilAtualizado={setPaciente} />;
+  }"""
+          if old not in s:
+              raise SystemExit('nova-consulta render snippet not found')
+          s = s.replace(old, new, 1)
+
+          s = s.replace(
+              "      historico={historico}\n      documentos={documentos}",
+              "      historico={historico}\n      atendimentoEmAndamento={atendimentoEmAndamento}\n      documentos={documentos}",
+              1,
+          )
+
+          s = s.replace(
+              "      onNovaConsulta={() => setTela('nova-consulta')}",
+              "      onNovaConsulta={() => { setRetomarAtendimento(null); setTela('nova-consulta'); }}\n      onRetomarAtendimento={(item) => {\n        if (item.etapa === 'chat') {\n          setHistoricoOrigem('home');\n          setHistoricoSelecionado({ ...(item as any), status: 'assumido' } as AtendimentoHistorico);\n          setTela('historico-chat');\n          return;\n        }\n        setRetomarAtendimento(item);\n        setTela('nova-consulta');\n      }}",
+              1,
+          )
+
+          old = """function PacienteHome({ paciente, agendamentos, historico, documentos, renovacoes, loading, initialScrollOffset, onScrollOffset, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
+  paciente: Paciente;
+  agendamentos: Agendamento[];
+  historico: AtendimentoHistorico[];
+  documentos: DocumentoPaciente[];"""
+          new = """function PacienteHome({ paciente, agendamentos, historico, atendimentoEmAndamento, documentos, renovacoes, loading, initialScrollOffset, onScrollOffset, mostrarTudo, onMostrarTudo, onAtualizar, onPerfil, onNovaConsulta, onRetomarAtendimento, onDocumentos, onRenovacao, onEspecialistas, onPsicologia, onAbrirRenovacao, onAbrirAtendimento }: {
+  paciente: Paciente;
+  agendamentos: Agendamento[];
+  historico: AtendimentoHistorico[];
+  atendimentoEmAndamento: AtendimentoEmAndamento | null;
+  documentos: DocumentoPaciente[];"""
+          if old not in s:
+              raise SystemExit('PacienteHome signature snippet not found')
+          s = s.replace(old, new, 1)
+
+          s = s.replace(
+              "  onNovaConsulta: () => void;\n  onDocumentos: () => void;",
+              "  onNovaConsulta: () => void;\n  onRetomarAtendimento: (item: AtendimentoEmAndamento) => void;\n  onDocumentos: () => void;",
+              1,
+          )
+
+          old = """  const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
+  const historicoConsultas = historico.filter((item) => !String(item.tipo || '').toLowerCase().startsWith('renovacao_'));
+  const atendimentoAtivo = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');"""
+          new = """  const primeiroNome = paciente.nome?.split(' ')[0] || 'Paciente';
+  const historicoConsultas = historico.filter((item) => !String(item.tipo || '').toLowerCase().startsWith('renovacao_'));
+  const atendimentoAtivoHistorico = historicoConsultas.find((item) => String(item.status || '').trim().toLowerCase() === 'assumido');
+  const atendimentoAtivo = atendimentoEmAndamento || atendimentoAtivoHistorico || null;"""
+          if old not in s:
+              raise SystemExit('atendimentoAtivo snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """        {atendimentoAtivo ? (
+          <Pressable onPress={() => onAbrirAtendimento(atendimentoAtivo)} style={({ pressed }) => [styles.activeCareCard, pressed && styles.primaryPressed]}>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.activeCareEyebrow}>ATENDIMENTO EM ANDAMENTO</Text></View>
+            <Text style={styles.activeCareTitle}>Continuar atendimento</Text>
+            <Text style={styles.activeCareText}>{atendimentoAtivo.medico_nome ? 'Voltar para a conversa com ' + atendimentoAtivo.medico_nome + '.' : 'Voltar para a conversa com o médico.'}</Text>
+            <Text style={styles.activeCareAction}>Abrir conversa ›</Text>
+          </Pressable>
+        ) : null}"""
+          new = """        {atendimentoAtivo ? (
+          <Pressable onPress={() => atendimentoEmAndamento ? onRetomarAtendimento(atendimentoEmAndamento) : onAbrirAtendimento(atendimentoAtivo as AtendimentoHistorico)} style={({ pressed }) => [styles.activeCareCard, pressed && styles.primaryPressed]}>
+            <View style={styles.liveRow}><View style={styles.liveDot} /><Text style={styles.activeCareEyebrow}>ATENDIMENTO EM ANDAMENTO</Text></View>
+            <Text style={styles.activeCareTitle}>Continuar atendimento</Text>
+            <Text style={styles.activeCareText}>{atendimentoEmAndamento?.etapa === 'pagamento' ? 'Seu pagamento ainda precisa ser concluído.' : atendimentoEmAndamento?.etapa === 'triagem' ? 'Pagamento confirmado. Continue sua triagem.' : atendimentoEmAndamento?.etapa === 'fila' ? 'Sua triagem foi concluída. Continue acompanhando o atendimento.' : atendimentoAtivo.medico_nome ? 'Voltar para a conversa com ' + atendimentoAtivo.medico_nome + '.' : 'Retome de onde você parou.'}</Text>
+            <Text style={styles.activeCareAction}>Continuar ›</Text>
+          </Pressable>
+        ) : null}"""
+          if old not in s:
+              raise SystemExit('active card snippet not found')
+          s = s.replace(old, new, 1)
+
+          old = """function NovaConsulta({ paciente, onVoltar, onPerfilAtualizado }: { paciente: Paciente; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {"""
+          new = """function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualizado }: { paciente: Paciente; atendimentoInicial?: AtendimentoEmAndamento | null; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {"""
+          if old not in s:
+              raise SystemExit('NovaConsulta signature not found')
+          s = s.replace(old, new, 1)
+
+          marker = """  const telefoneContato = digits(paciente.tel);
+
+  function validarDados() {"""
+          insert = """  const telefoneContato = digits(paciente.tel);
+
+  useEffect(() => {
+    if (!atendimentoInicial?.id) return;
+    setAtendimentoPagoId(atendimentoInicial.id);
+    if (atendimentoInicial.nome) setNomeProprio(String(atendimentoInicial.nome));
+    const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
+    if (queixaSalva && !/^\(.*(pagamento|review|demonstra).*(\)$/i.test(queixaSalva)) setQueixa(queixaSalva);
+
+    if (atendimentoInicial.etapa === 'pagamento') {
+      setEtapaConsulta('pagamento');
+      return;
+    }
+    if (atendimentoInicial.etapa === 'fila') {
+      setEtapaConsulta('fila');
+      return;
+    }
+    if (atendimentoInicial.etapa === 'triagem') {
+      const queixaBase = queixaSalva && !queixaSalva.startsWith('(') ? queixaSalva : 'Queixa informada anteriormente';
+      const history: TriageMessage[] = [{ role: 'user', content: `Queixa inicial informada pelo paciente: ${queixaBase}` }];
+      setQueixa(queixaBase);
+      setTriageMessages(history);
+      setPerguntaAtual('');
+      setRespostaTriagem('');
+      setEtapaConsulta('triagem');
+      setTriagemLoading(true);
+      conversarTriagem(SYSTEM_TRIAGE, history)
+        .then((data) => tratarRetornoTriagem(data.text, history, atendimentoInicial.id))
+        .catch(() => Alert.alert('Triagem', 'Não foi possível retomar a triagem agora. Tente novamente em instantes.'))
+        .finally(() => setTriagemLoading(false));
+    }
+  }, [atendimentoInicial?.id]);
+
+  function validarDados() {"""
+          if marker not in s:
+              raise SystemExit('NovaConsulta resume insertion marker not found')
+          s = s.replace(marker, insert, 1)
+
+          p.write_text(s)
+          PY
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add App.tsx
+          git commit -m "Show and resume active consultation from home" || exit 0
+          git push
+      - name: Publish OTA
+        if: env.EXPO_TOKEN != ''
+        run: npx eas-cli@latest update --channel production --message "Fix active consultation resume from home" --non-interactive
