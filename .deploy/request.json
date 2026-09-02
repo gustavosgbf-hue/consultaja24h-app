@@ -1,5 +1,5 @@
 {
-  "action": "submit_testflight",
-  "message": "Submit final iOS build 6",
-  "requested_at": "2026-08-25T05:59:00-03:00"
+  "action": "ios_build",
+  "message": "Build iOS with App Review sandbox and app icon",
+  "requested_at": "2026-09-01T21:49:00-03:00"
 }
