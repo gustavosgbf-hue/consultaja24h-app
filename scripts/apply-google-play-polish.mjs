@@ -39,9 +39,9 @@ root = replaceOnce(
   'AppRoot BackHandler import',
 );
 
-const rootBackEffect = `\n  useEffect(() => {\n    if (Platform.OS !== 'android') return;\n    const sub = BackHandler.addEventListener('hardwareBackPress', () => {\n      if (modoAtendimento) {\n        if (atendimento?.etapa === 'chat') chatFechadoManualRef.current = true;\n        setModoAtendimento(false);\n        setMostrarInicio(true);\n        return true;\n      }\n      if (atendimento && !mostrarInicio && !betaEmTriagem) {\n        setMostrarInicio(true);\n        return true;\n      }\n      return false;\n    });\n    return () => sub.remove();\n  }, [atendimento, betaEmTriagem, modoAtendimento, mostrarInicio]);\n`;
+const rootBackEffect = `\n  useEffect(() => {\n    if (Platform.OS !== 'android') return;\n    const sub = BackHandler.addEventListener('hardwareBackPress', () => {\n      if (modoAtendimento) {\n        if (atendimento?.etapa === 'chat') chatFechadoManualRef.current = true;\n        setModoAtendimento(false);\n        setMostrarInicio(true);\n        return true;\n      }\n      if (atendimento && !mostrarInicio && !betaEmFluxoLocal) {\n        setMostrarInicio(true);\n        return true;\n      }\n      return false;\n    });\n    return () => sub.remove();\n  }, [atendimento, betaEmFluxoLocal, modoAtendimento, mostrarInicio]);\n`;
 
-const rootAnchor = `  const betaEmTriagem = atendimento?.etapa === 'triagem' && atendimento.pagamento_metodo === 'beta_test';\n`;
+const rootAnchor = `  const betaEmFluxoLocal = atendimento?.pagamento_metodo === 'beta_test' &&\n    (atendimento.etapa === 'pagamento' || atendimento.etapa === 'triagem');\n`;
 if (!root.includes(rootBackEffect.trim())) {
   root = replaceOnce(root, rootAnchor, rootAnchor + rootBackEffect, 'AppRoot Android back effect');
 }
@@ -72,7 +72,7 @@ viewer = replaceOnce(
 chat = replaceOnce(
   chat,
   `          ) : viewer?.url ? (\n            <WebView source={{ uri: viewer.url }} style={styles.webview} startInLoadingState renderLoading={() => <View style={styles.center}><ActivityIndicator color=\"#16c783\" /></View>} />\n          ) : null}`,
-  `          ) : viewer?.url ? (\n            Platform.OS === 'android' ? (\n              <View style={styles.androidPdfWrap}>\n                <Text style={styles.androidPdfTitle}>Documento pronto para abrir</Text>\n                <Text style={styles.androidPdfText}>No Android, o PDF será aberto no visualizador do aparelho.</Text>\n                <Pressable onPress={() => Linking.openURL(viewer.url)} style={styles.androidPdfButton} accessibilityRole=\"button\" accessibilityLabel=\"Abrir PDF\">\n                  <Text style={styles.androidPdfButtonText}>Abrir PDF</Text>\n                </Pressable>\n              </View>\n            ) : (\n              <WebView source={{ uri: viewer.url }} style={styles.webview} startInLoadingState renderLoading={() => <View style={styles.center}><ActivityIndicator color=\"#16c783\" /></View>} />\n            )\n          ) : null}`,
+  `          ) : viewer?.url ? (\n            Platform.OS === 'android' ? (\n              <View style={styles.androidPdfWrap}>\n                <Text style={styles.androidPdfTitle}>Documento pronto para abrir</Text>\n                <Text style={styles.androidPdfText}>No Android, o PDF será aberto no visualizador do aparelho.</Text>\n                <Pressable onPress={() => Linking.openURL(String(viewer?.url || ''))} style={styles.androidPdfButton} accessibilityRole=\"button\" accessibilityLabel=\"Abrir PDF\">\n                  <Text style={styles.androidPdfButtonText}>Abrir PDF</Text>\n                </Pressable>\n              </View>\n            ) : (\n              <WebView source={{ uri: viewer.url }} style={styles.webview} startInLoadingState renderLoading={() => <View style={styles.center}><ActivityIndicator color=\"#16c783\" /></View>} />\n            )\n          ) : null}`,
   'Chat Android PDF fallback',
 );
 
@@ -83,14 +83,7 @@ chat = replaceOnce(
   'Chat Android PDF styles',
 );
 
-// Until Android screens subscribe to Appearance changes, do not expose a toggle that only moves visually.
-theme = replaceOnce(
-  theme,
-  `export default function ThemeToggle() {\n  const [scheme, setScheme] = useState<ColorSchemeName>('dark');`,
-  `export default function ThemeToggle() {\n  const [scheme, setScheme] = useState<ColorSchemeName>('dark');`,
-  'ThemeToggle anchor',
-);
-
+// Android screens are currently dark-only; do not expose a toggle that only moves visually.
 const themeReturnAnchor = `  const dark = scheme !== 'light';\n\n  async function toggle() {`;
 const themeReturnReplacement = `  const dark = scheme !== 'light';\n\n  if (Platform.OS === 'android') return null;\n\n  async function toggle() {`;
 if (!theme.includes(`if (Platform.OS === 'android') return null;`)) {
