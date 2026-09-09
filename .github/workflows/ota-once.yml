@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/ota-once.yml'
 
+permissions:
+  contents: write
+
 jobs:
   validate-and-publish:
     runs-on: ubuntu-latest
@@ -14,6 +17,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply platform origin tracking
+        run: node scripts/apply-platform-origin.mjs
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,6 +35,18 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Commit platform tracking
+        run: |
+          if git diff --quiet -- src/api/client.ts; then
+            echo "Platform tracking already present"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/api/client.ts
+            git commit -m "Track Android and iOS consultation origin"
+            git push origin HEAD:main
+          fi
+
       - name: Verify Expo authentication
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
@@ -35,4 +55,4 @@ jobs:
           fi
 
       - name: Publish OTA to production
-        run: npx eas-cli@latest update --channel production --message "Google Play Android polish: PDF, back navigation, camera copy and theme guard" --non-interactive
+        run: npx eas-cli@latest update --channel production --message "Track consultation origin: Android/iOS" --non-interactive
