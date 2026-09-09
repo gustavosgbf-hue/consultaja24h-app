@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { getSessionToken } from '../auth/session';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from '../types';
 
@@ -14,6 +15,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 
 async function postJson<T>(path: string, body: unknown, authenticated = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  headers['X-ConsultaJa-Platform'] = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
   if (authenticated) {
     const token = await getSessionToken();
     if (!token) throw new Error('Sessão não encontrada');
@@ -227,7 +229,7 @@ export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
     data_nascimento: input.dataNascimento || '',
     email: input.email || '',
     atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
-    origem: 'app_paciente',
+    origem: `app_${Platform.OS}`,
   });
 }
 
@@ -346,7 +348,6 @@ export async function consultarStatusAtendimento(atendimentoId: number) {
   }>(response);
 }
 
-
 export type RenovacaoPaciente = {
   id: number;
   tipo: string;
@@ -379,7 +380,6 @@ export async function carregarRenovacaoPaciente(id: number) {
     '/api/paciente/renovacao/' + encodeURIComponent(String(id)),
   );
 }
-
 
 export async function solicitarExclusaoConta() {
   return postJson<{ ok: boolean; message?: string }>(
