@@ -2,7 +2,7 @@ name: Google Play OTA
 
 on:
   push:
-    branches: [main]
+    branches: [deploy/google-play-ota]
     paths:
       - '.github/workflows/google-play-ota.yml'
 
