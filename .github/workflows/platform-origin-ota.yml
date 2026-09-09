@@ -1,0 +1,72 @@
+name: Platform origin tracking OTA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/platform-origin-ota.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch platform origin header
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/api/client.ts')
+          s = p.read_text()
+
+          if "import { Platform } from 'react-native';" not in s:
+              marker = "import { getSessionToken } from '../auth/session';\n"
+              if marker not in s:
+                  raise SystemExit('client import marker not found')
+              s = s.replace(marker, "import { Platform } from 'react-native';\n" + marker, 1)
+
+          header_line = "  const headers: Record<string, string> = { 'Content-Type': 'application/json' };\n"
+          platform_line = "  headers['X-ConsultaJa-Platform'] = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';\n"
+          if platform_line not in s:
+              if header_line not in s:
+                  raise SystemExit('postJson headers marker not found')
+              s = s.replace(header_line, header_line + platform_line, 1)
+
+          s = s.replace("    origem: 'app_paciente',\n", "    origem: `app_${Platform.OS}`,\n")
+          p.write_text(s)
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Commit app tracking
+        run: |
+          if git diff --quiet -- src/api/client.ts; then
+            echo "No app code changes needed"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/api/client.ts
+            git commit -m "Track Android and iOS consultation origin"
+            git push origin HEAD:main
+          fi
+
+      - name: Publish production OTA
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest update --channel production --message "Track consultation origin: Android/iOS" --non-interactive
