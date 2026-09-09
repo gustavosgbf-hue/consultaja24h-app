@@ -24,4 +24,4 @@ jobs:
       - name: Publish production OTA
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli@latest update --channel production --message "Track consultation origin: Android/iOS" --non-interactive
+        run: npx eas-cli@latest update --channel production --message "Track consultation origin Android iOS" --non-interactive
