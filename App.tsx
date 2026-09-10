@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Animated,
   DynamicColorIOS,
   KeyboardAvoidingView,
@@ -242,6 +243,27 @@ export default function App() {
   useEffect(() => {
     restaurarSessao();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (tela !== 'home') {
+        setWebPage(null);
+        setRenovacaoSelecionada(null);
+        setHistoricoSelecionado(null);
+        setTela('home');
+        return true;
+      }
+      if (!paciente && etapa !== 'telefone') {
+        setEtapa('telefone');
+        setCodigo('');
+        setChallengeId('');
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [etapa, paciente, tela]);
 
   useEffect(() => {
     setPushNavigationHandler((action) => {
@@ -983,6 +1005,16 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable
+          onPress={confirmarExclusaoConta}
+          disabled={excluindoConta}
+          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+        >
+          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
+        </Pressable>
+
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -1021,8 +1053,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     Animated.parallel([
       Animated.timing(stageX, { toValue: direction === 1 ? -28 : 28, duration: 150, useNativeDriver: true }),
       Animated.timing(stageOpacity, { toValue: 0, duration: 120, useNativeDriver: true }),
-    ]).start(({ finished }) => {
-      if (!finished) return;
+    ]).start(() => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setEtapaConsulta(next);
       stageX.setValue(direction === 1 ? 34 : -34);
