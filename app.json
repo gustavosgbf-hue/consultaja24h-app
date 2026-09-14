@@ -17,7 +17,11 @@
     },
     "android": {
       "package": "com.consultaja24h.app",
-      "versionCode": 5
+      "versionCode": 5,
+      "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -38,7 +42,8 @@
           "enableBackgroundRecording": false
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      "@react-native-firebase/app"
     ],
     "extra": {
       "eas": {

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "454945036032",
+    "project_id": "consultaja24h-app-analytics",
+    "storage_bucket": "consultaja24h-app-analytics.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:454945036032:android:4f8dcd18145dfe217f85e5",
+        "android_client_info": {
+          "package_name": "com.consultaja24h.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWxfaXmZpwZAdThbKv0SDjdBjBITkp-bU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

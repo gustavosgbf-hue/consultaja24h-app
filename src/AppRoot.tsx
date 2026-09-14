@@ -24,6 +24,7 @@ import AtendimentoAtual from './components/AtendimentoAtual';
 import AtendimentoEmAndamentoCard from './components/AtendimentoEmAndamentoCard';
 import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/push';
 import { emitPushNavigation } from './navigation/pushNavigation';
+import { initializeAndroidAttribution } from './attribution/installAttribution';
 
 function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
   atendimento: AtendimentoEmAndamento;
@@ -64,6 +65,12 @@ export default function AppRoot() {
   const atendimentoIdRef = useRef<number | null>(null);
   const etapaRef = useRef<AtendimentoEmAndamento['etapa'] | null>(null);
   const chatFechadoManualRef = useRef(false);
+
+  useEffect(() => {
+    initializeAndroidAttribution().catch(() => {
+      // O tracking nunca pode impedir a abertura nem o atendimento no app.
+    });
+  }, []);
 
   useEffect(() => {
     let ativo = true;

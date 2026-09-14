@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getSessionToken } from '../auth/session';
+import { getAndroidAttributionPayload } from '../attribution/installAttribution';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from '../types';
 
 const API_BASE_URL = 'https://triagem-api.onrender.com';
@@ -220,6 +221,7 @@ export async function enviarMensagemChatPaciente(atendimentoId: number, texto: s
 }
 
 export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
+  const attribution = await getAndroidAttributionPayload().catch(() => undefined);
   return postJson<IniciarAtendimentoResponse>('/api/notify', {
     nome: input.nome,
     tel: input.telefone,
@@ -230,6 +232,7 @@ export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
     email: input.email || '',
     atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
     origem: `app_${Platform.OS}`,
+    attribution,
   });
 }
 

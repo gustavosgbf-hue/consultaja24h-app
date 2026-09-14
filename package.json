@@ -11,9 +11,12 @@
     "typecheck": "node scripts/apply-attachment-confirm-and-swipe.mjs && node scripts/apply-light-theme-and-home-startup.mjs && node scripts/apply-patient-profile-api.mjs && node scripts/apply-patient-profile-form.mjs && node scripts/apply-personal-data-visual-polish.mjs && node scripts/apply-support-entry.mjs && node scripts/apply-renewal-webview-cleanup.mjs && node scripts/apply-account-deletion.mjs && node scripts/apply-review-login.mjs && node scripts/apply-app-review-sandbox.mjs && node scripts/apply-review-flow-resume-fix.mjs && node scripts/apply-google-play-polish.mjs && tsc --noEmit"
   },
   "dependencies": {
+    "@react-native-firebase/analytics": "^26.4.0",
+    "@react-native-firebase/app": "^26.4.0",
     "expo": "~57.0.0",
     "expo-audio": "~57.0.4",
     "expo-clipboard": "~57.0.1",
+    "expo-crypto": "~57.0.3",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.4",
     "expo-image-picker": "~57.0.11",
@@ -30,5 +33,10 @@
   "devDependencies": {
     "@types/react": "~19.2.0",
     "typescript": "~5.9.0"
+  },
+  "expo": {
+    "autolinking": {
+      "nativeModulesDir": "./modules"
+    }
   }
 }
