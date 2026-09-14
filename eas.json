@@ -13,6 +13,13 @@
       "distribution": "internal",
       "channel": "preview"
     },
+    "internal-play": {
+      "distribution": "store",
+      "channel": "preview",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production"
