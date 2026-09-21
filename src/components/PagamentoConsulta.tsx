@@ -57,7 +57,7 @@ export default function PagamentoConsulta({
 
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
-  const modoReview = telefoneContato === '98991344646';
+  const modoReview = telefoneContato === '98900000000';
 
   async function garantirAtendimento() {
     if (atendimentoId) return atendimentoId;

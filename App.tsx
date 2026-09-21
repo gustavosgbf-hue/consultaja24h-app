@@ -965,56 +965,6 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
-        <Pressable
-          onPress={confirmarExclusaoConta}
-          disabled={excluindoConta}
-          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir minha conta"
-        >
-          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={confirmarExclusaoConta}
-          disabled={excluindoConta}
-          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir minha conta"
-        >
-          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={confirmarExclusaoConta}
-          disabled={excluindoConta}
-          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir minha conta"
-        >
-          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={confirmarExclusaoConta}
-          disabled={excluindoConta}
-          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir minha conta"
-        >
-          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={confirmarExclusaoConta}
-          disabled={excluindoConta}
-          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir minha conta"
-        >
-          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
-        </Pressable>
-
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -1148,7 +1098,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   async function irParaPagamento() {
     if (!validarDados() || salvandoPerfil) return;
 
-    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';
+    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98900000000';
     if (!modoReviewFluxo) {
       try {
         const existente = await carregarAtendimentoEmAndamento();

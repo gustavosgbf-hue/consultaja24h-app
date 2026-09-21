@@ -18,12 +18,14 @@ function replaceOnce(source, from, to, label) {
 }
 
 // Android back: preserve expected in-app navigation instead of exiting from nested screens.
-app = replaceOnce(
-  app,
-  `  ActivityIndicator,\n  Alert,`,
-  `  ActivityIndicator,\n  Alert,\n  BackHandler,`,
-  'App BackHandler import',
-);
+if (!app.includes('  BackHandler,\n')) {
+  app = replaceOnce(
+    app,
+    `  ActivityIndicator,\n  Alert,`,
+    `  ActivityIndicator,\n  Alert,\n  BackHandler,`,
+    'App BackHandler import',
+  );
+}
 
 const appBackEffect = `\n  useEffect(() => {\n    if (Platform.OS !== 'android') return;\n    const sub = BackHandler.addEventListener('hardwareBackPress', () => {\n      if (tela !== 'home') {\n        setWebPage(null);\n        setRenovacaoSelecionada(null);\n        setHistoricoSelecionado(null);\n        setTela('home');\n        return true;\n      }\n      if (!paciente && etapa !== 'telefone') {\n        setEtapa('telefone');\n        setCodigo('');\n        setChallengeId('');\n        return true;\n      }\n      return false;\n    });\n    return () => sub.remove();\n  }, [etapa, paciente, tela]);\n`;
 
@@ -32,12 +34,14 @@ if (!app.includes(appBackEffect.trim())) {
   app = replaceOnce(app, appEffectAnchor, appEffectAnchor + appBackEffect, 'App Android back effect');
 }
 
-root = replaceOnce(
-  root,
-  `  ActivityIndicator,\n  Animated,\n  AppState,`,
-  `  ActivityIndicator,\n  Animated,\n  AppState,\n  BackHandler,`,
-  'AppRoot BackHandler import',
-);
+if (!root.includes('  BackHandler,\n')) {
+  root = replaceOnce(
+    root,
+    `  ActivityIndicator,\n  Animated,\n  AppState,`,
+    `  ActivityIndicator,\n  Animated,\n  AppState,\n  BackHandler,`,
+    'AppRoot BackHandler import',
+  );
+}
 
 const rootBackEffect = `\n  useEffect(() => {\n    if (Platform.OS !== 'android') return;\n    const sub = BackHandler.addEventListener('hardwareBackPress', () => {\n      if (modoAtendimento) {\n        if (atendimento?.etapa === 'chat') chatFechadoManualRef.current = true;\n        setModoAtendimento(false);\n        setMostrarInicio(true);\n        return true;\n      }\n      if (atendimento && !mostrarInicio && !betaEmFluxoLocal) {\n        setMostrarInicio(true);\n        return true;\n      }\n      return false;\n    });\n    return () => sub.remove();\n  }, [atendimento, betaEmFluxoLocal, modoAtendimento, mostrarInicio]);\n`;
 

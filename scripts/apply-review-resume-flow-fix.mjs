@@ -12,13 +12,13 @@ function patch(path, transform) {
 }
 
 patch('App.tsx', (src) => {
-  if (src.includes("const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';")) return src;
+  if (src.includes("const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98900000000';")) return src;
 
   const oldBlock = `    try {\n      const existente = await carregarAtendimentoEmAndamento();\n      if (existente.atendimento) {\n        Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');\n        onVoltar();\n        return;\n      }\n    } catch {\n      // Se a checagem temporária falhar, o fluxo existente continua normalmente.\n    }\n`;
 
   if (!src.includes(oldBlock)) throw new Error('App.tsx review resume marker not found');
 
-  const replacement = `    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98991344646';\n    if (!modoReviewFluxo) {\n      try {\n        const existente = await carregarAtendimentoEmAndamento();\n        if (existente.atendimento) {\n          Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');\n          onVoltar();\n          return;\n        }\n      } catch {\n        // Se a checagem temporária falhar, o fluxo existente continua normalmente.\n      }\n    }\n`;
+  const replacement = `    const modoReviewFluxo = digits(paciente.tel).slice(-11) === '98900000000';\n    if (!modoReviewFluxo) {\n      try {\n        const existente = await carregarAtendimentoEmAndamento();\n        if (existente.atendimento) {\n          Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');\n          onVoltar();\n          return;\n        }\n      } catch {\n        // Se a checagem temporária falhar, o fluxo existente continua normalmente.\n      }\n    }\n`;
 
   return src.replace(oldBlock, replacement);
 });

@@ -14,7 +14,7 @@ function patch(path, transform) {
 patch('App.tsx', (src) => {
   let out = src;
   out = out.replace(`  iniciarAtendimentoBeta,\n`, '');
-  out = out.replace(`const BETA_TEST_PHONE = '98991344646';\n`, '');
+  out = out.replace(`const BETA_TEST_PHONE = '98900000000';\n`, '');
   out = out.replace(`  const [iniciandoBeta, setIniciandoBeta] = useState(false);\n`, '');
   out = out.replace(`    if (!validarDados() || iniciandoBeta || salvandoPerfil) return;`, `    if (!validarDados() || salvandoPerfil) return;`);
   out = out.replace(`loading={iniciandoBeta || salvandoPerfil}`, `loading={salvandoPerfil}`);
@@ -33,7 +33,7 @@ patch('src/components/PagamentoConsulta.tsx', (src) => {
   const phoneMarker = `  const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);\n`;
   if (!out.includes('const modoReview = telefoneContato ===')) {
     if (!out.includes(phoneMarker)) throw new Error('PagamentoConsulta phone marker not found');
-    out = out.replace(phoneMarker, `${phoneMarker}  const modoReview = telefoneContato === '98991344646';\n`);
+    out = out.replace(phoneMarker, `${phoneMarker}  const modoReview = telefoneContato === '98900000000';\n`);
   }
 
   const leadMarker = `      <Text style={styles.lead}>Assim que o pagamento for confirmado, o app libera uma triagem rápida antes de entrar na fila médica.</Text>\n`;

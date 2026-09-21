@@ -29,7 +29,7 @@ if (!perfil.includes('const [excluindoConta, setExcluindoConta]')) {
 }
 
 const logoutAnchor = `        <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>`;
-if (!perfil.includes('Excluir minha conta</Text>')) {
+if (!perfil.includes('accessibilityLabel="Excluir minha conta"')) {
   if (!perfil.includes(logoutAnchor)) throw new Error('Logout anchor not found');
   const deletionButton = `        <Pressable\n          onPress={confirmarExclusaoConta}\n          disabled={excluindoConta}\n          style={[styles.logoutButton, { marginTop: 10, borderColor: 'rgba(239,68,68,.28)' }, excluindoConta && { opacity: 0.55 }]}\n          accessibilityRole="button"\n          accessibilityLabel="Excluir minha conta"\n        >\n          <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>\n        </Pressable>\n\n${logoutAnchor}`;
   perfil = perfil.replace(logoutAnchor, deletionButton);
