@@ -284,7 +284,18 @@ export default function App() {
     try {
       const token = await getSessionToken();
       if (!token) return;
-      await carregarHome();
+
+      // No cold start, wait only for the minimum needed to identify the patient.
+      // The rest of the home data loads after the first useful screen is already visible.
+      const me = await carregarPaciente();
+      if (!me?.paciente) throw new Error('Paciente não encontrado');
+      setPaciente(me.paciente);
+      setBooting(false);
+
+      void carregarHome().catch(() => {
+        // Keep the already-restored session visible if secondary home data is temporarily unavailable.
+      });
+      return;
     } catch {
       await clearSessionToken();
     } finally {

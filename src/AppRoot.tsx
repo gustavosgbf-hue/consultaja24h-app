@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   AppState,
   DynamicColorIOS,
@@ -58,7 +57,6 @@ function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
 }
 
 export default function AppRoot() {
-  const [checking, setChecking] = useState(true);
   const [atendimento, setAtendimento] = useState<AtendimentoEmAndamento | null>(null);
   const [modoAtendimento, setModoAtendimento] = useState(false);
   const [mostrarInicio, setMostrarInicio] = useState(false);
@@ -114,7 +112,6 @@ export default function AppRoot() {
         // Sem sessão, sessão expirada ou sem atendimento: o fluxo normal cuida disso.
       } finally {
         checando = false;
-        if (ativo) setChecking(false);
       }
     }
 
@@ -187,14 +184,6 @@ export default function AppRoot() {
   }, []);
 
   const betaEmTriagem = atendimento?.etapa === 'triagem' && atendimento.pagamento_metodo === 'beta_test';
-
-  if (checking) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#16c783" />
-      </SafeAreaView>
-    );
-  }
 
   if (modoAtendimento && atendimento && !betaEmTriagem) {
     return (
