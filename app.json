@@ -44,7 +44,7 @@
         }
       ],
       "expo-document-picker",
-      "@react-native-firebase/app"
+      "./plugins/with-rn-firebase-android.js"
     ],
     "extra": {
       "eas": {
