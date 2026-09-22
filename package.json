@@ -36,7 +36,13 @@
   },
   "expo": {
     "autolinking": {
-      "nativeModulesDir": "./modules"
+      "nativeModulesDir": "./modules",
+      "ios": {
+        "exclude": [
+          "@react-native-firebase/app",
+          "@react-native-firebase/analytics"
+        ]
+      }
     }
   }
 }
