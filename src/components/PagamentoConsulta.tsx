@@ -11,6 +11,7 @@ import {
   vincularPixAoAtendimento,
 } from '../api/client';
 import type { Paciente } from '../types';
+import { trackIosEvent } from '../attribution/iosTelemetry';
 import EfiCardForm from './EfiCardForm';
 
 type Props = {
@@ -59,6 +60,11 @@ export default function PagamentoConsulta({
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
   const modoReview = telefoneContato === '98900000000';
 
+  function confirmarPagamento(id: number) {
+    void trackIosEvent('ios_payment_confirmed', id);
+    onPagamentoConfirmado(id);
+  }
+
   async function garantirAtendimento() {
     if (atendimentoId) return atendimentoId;
     if (!telefoneContato) throw new Error('Celular não encontrado no seu cadastro.');
@@ -76,7 +82,7 @@ export default function PagamentoConsulta({
     if (!criado.atendimentoId) throw new Error('Não foi possível criar o atendimento.');
     setAtendimentoId(criado.atendimentoId);
     if (criado.pagamentoConfirmado) {
-      onPagamentoConfirmado(criado.atendimentoId);
+      confirmarPagamento(criado.atendimentoId);
     }
     return criado.atendimentoId;
   }
@@ -95,7 +101,7 @@ export default function PagamentoConsulta({
         if (pix.pago) {
           setStatus('Pagamento confirmado');
           ativo = false;
-          onPagamentoConfirmado(atendimentoId!);
+          confirmarPagamento(atendimentoId!);
           return;
         }
         const atendimento = await consultarStatusAtendimento(atendimentoId!);
@@ -103,7 +109,7 @@ export default function PagamentoConsulta({
         if (atendimento.atendimento?.pagamento_status === 'confirmado') {
           setStatus('Pagamento confirmado');
           ativo = false;
-          onPagamentoConfirmado(atendimentoId!);
+          confirmarPagamento(atendimentoId!);
           return;
         }
         setStatus('Aguardando pagamento…');
@@ -137,7 +143,7 @@ export default function PagamentoConsulta({
           setStatus('Pagamento confirmado');
           setCartaoPendente(false);
           ativo = false;
-          onPagamentoConfirmado(atendimentoId!);
+          confirmarPagamento(atendimentoId!);
           return;
         }
         setStatus('Cartão recebido · aguardando confirmação da Efí…');
@@ -228,7 +234,7 @@ export default function PagamentoConsulta({
       setCartaoMask(payload.cardMask || '');
       if (resposta.status === 'paid' || resposta.status === 'approved') {
         setStatus('Pagamento confirmado');
-        onPagamentoConfirmado(id);
+        confirmarPagamento(id);
         return;
       }
       if (resposta.ok && resposta.status === 'waiting') {
@@ -262,14 +268,14 @@ export default function PagamentoConsulta({
         const pix = await consultarStatusPix(orderId);
         if (pix.pago) {
           setStatus('Pagamento confirmado');
-          onPagamentoConfirmado(atendimentoId);
+          confirmarPagamento(atendimentoId);
           return;
         }
       }
       const atendimento = await consultarStatusAtendimento(atendimentoId);
       if (atendimento.atendimento?.pagamento_status === 'confirmado') {
         setStatus('Pagamento confirmado');
-        onPagamentoConfirmado(atendimentoId);
+        confirmarPagamento(atendimentoId);
         return;
       }
       setStatus('Ainda aguardando confirmação…');

@@ -51,6 +51,7 @@ import ChatPaciente from './src/components/ChatPaciente';
 import ThemeToggle from './src/components/ThemeToggle';
 import DocumentViewer from './src/components/DocumentViewer';
 import { setPushNavigationHandler } from './src/navigation/pushNavigation';
+import { trackIosEvent } from './src/attribution/iosTelemetry';
 import { WebView } from 'react-native-webview';
 import type { Agendamento, AtendimentoHistorico, DocumentoPaciente, Paciente } from './src/types';
 
@@ -408,6 +409,7 @@ export default function App() {
       const data = await verificarOtpPaciente(challengeId, numeros);
       if (!data.token || !data.paciente) throw new Error('Não foi possível concluir o acesso.');
       await saveSessionToken(data.token);
+      void trackIosEvent('ios_login');
       setPaciente(data.paciente);
       setTela('home');
       await carregarHome();

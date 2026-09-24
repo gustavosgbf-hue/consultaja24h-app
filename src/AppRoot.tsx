@@ -24,6 +24,7 @@ import AtendimentoEmAndamentoCard from './components/AtendimentoEmAndamentoCard'
 import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/push';
 import { emitPushNavigation } from './navigation/pushNavigation';
 import { initializeAndroidAttribution } from './attribution/installAttribution';
+import { trackIosEvent } from './attribution/iosTelemetry';
 
 function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
   atendimento: AtendimentoEmAndamento;
@@ -68,6 +69,7 @@ export default function AppRoot() {
     initializeAndroidAttribution().catch(() => {
       // O tracking nunca pode impedir a abertura nem o atendimento no app.
     });
+    void trackIosEvent('ios_first_open');
   }, []);
 
   useEffect(() => {
