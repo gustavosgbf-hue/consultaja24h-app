@@ -1,5 +1,5 @@
 {
   "action": "ota",
-  "message": "Fix triage composer above keyboard",
-  "requested_at": "2026-09-02T18:33:00-03:00"
+  "message": "Desabilitar temporariamente pagamento por cartão",
+  "requested_at": "2026-10-09T00:00:00-03:00"
 }
