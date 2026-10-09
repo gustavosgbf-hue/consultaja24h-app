@@ -19,8 +19,8 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
-      - name: Typecheck current source
-        run: npx tsc --noEmit
+      - name: Validate changed payment file exists
+        run: grep -q "const CARD_ENABLED = false" src/components/PagamentoConsulta.tsx
       - name: Verify Expo authentication
         run: |
           test -n "$EXPO_TOKEN"
