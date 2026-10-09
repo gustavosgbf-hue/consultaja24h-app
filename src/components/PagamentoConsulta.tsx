@@ -26,6 +26,8 @@ type Props = {
 
 type Metodo = 'pix' | 'cartao';
 
+const CARD_ENABLED = false;
+
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -59,6 +61,7 @@ export default function PagamentoConsulta({
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
   const modoReview = telefoneContato === '98900000000';
+  const cardEnabled = CARD_ENABLED || modoReview;
 
   function confirmarPagamento(id: number) {
     void trackIosEvent('ios_payment_confirmed', id);
@@ -311,9 +314,14 @@ export default function PagamentoConsulta({
               <Text style={[styles.tabText, metodo === 'pix' && styles.tabTextActive]}>PIX</Text>
               <Text style={styles.tabHint}>PagBank</Text>
             </Pressable>
-            <Pressable onPress={() => setMetodo('cartao')} style={[styles.tab, metodo === 'cartao' && styles.tabActive]}>
-              <Text style={[styles.tabText, metodo === 'cartao' && styles.tabTextActive]}>Cartão</Text>
-              <Text style={styles.tabHint}>Efí</Text>
+            <Pressable
+              onPress={() => { if (cardEnabled) setMetodo('cartao'); }}
+              disabled={!cardEnabled}
+              accessibilityState={{ disabled: !cardEnabled }}
+              style={[styles.tab, metodo === 'cartao' && styles.tabActive, !cardEnabled && styles.tabDisabled]}
+            >
+              <Text style={[styles.tabText, metodo === 'cartao' && styles.tabTextActive, !cardEnabled && styles.tabTextDisabled]}>Cartão</Text>
+              <Text style={[styles.tabHint, !cardEnabled && styles.tabHintDisabled]}>{cardEnabled ? 'Efí' : 'Temporariamente indisponível'}</Text>
             </Pressable>
           </View>
 
@@ -411,9 +419,12 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 9, marginBottom: 10 },
   tab: { flex: 1, borderRadius: 15, borderWidth: 1, borderColor: '#1d342f', backgroundColor: '#0b1715', paddingVertical: 12, alignItems: 'center' },
   tabActive: { borderColor: '#16c783', backgroundColor: '#0f211c' },
+  tabDisabled: { opacity: .45, backgroundColor: '#0a1211', borderColor: '#172622' },
   tabText: { color: '#a9b5b0', fontWeight: '900', fontSize: 14 },
   tabTextActive: { color: '#fff' },
+  tabTextDisabled: { color: '#74807c' },
   tabHint: { color: '#71807b', fontSize: 10.5, marginTop: 2 },
+  tabHintDisabled: { color: '#59645f', fontSize: 9.5 },
   methodCard: { backgroundColor: '#0b1715', borderWidth: 1, borderColor: '#285746', borderRadius: 19, padding: 17 },
   methodHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   methodTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
