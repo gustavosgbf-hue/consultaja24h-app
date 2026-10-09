@@ -1,4 +1,5 @@
 name: Card checkout OTA
+# one-off guarded publish
 
 on:
   push:
