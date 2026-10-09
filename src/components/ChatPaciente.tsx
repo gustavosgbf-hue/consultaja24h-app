@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   audioProgress: { height: 3, borderRadius: 2, backgroundColor: '#16c783' },
   audioTime: { marginTop: 5, color: themeColor('#66736e', '#7f9189'), fontSize: 9.5 },
   error: { color: '#f29aa1', textAlign: 'center', fontSize: 11.5, marginTop: 12 },
-  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 10, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 34, backgroundColor: themeColor('#e8efeb', '#07100f') },
   composer: { minHeight: 52, flexDirection: 'row', alignItems: 'flex-end', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 19, padding: 5 },
   iconButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, minHeight: 42, maxHeight: 110, paddingHorizontal: 4, paddingVertical: 10, color: themeColor('#14201d', '#eef5f1'), fontSize: 15 },

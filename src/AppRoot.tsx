@@ -238,7 +238,7 @@ export default function AppRoot() {
   return (
     <View style={styles.appWrap}>
       <LegacyApp />
-      {atendimento && !betaEmTriagem ? (
+      {atendimento && atendimento.etapa !== 'triagem' && !betaEmTriagem ? (
         <Pressable
           onPress={() => {
             chatFechadoManualRef.current = false;
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 18,
+    bottom: Platform.OS === 'android' ? 34 : 18,
     minHeight: 64,
     borderRadius: 18,
     paddingHorizontal: 15,

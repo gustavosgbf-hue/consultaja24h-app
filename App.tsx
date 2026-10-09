@@ -1938,7 +1938,7 @@ const styles = StyleSheet.create({
   aiBubbleText: { color: '#26332f', lineHeight: 20, fontSize: 14 },
   userBubble: { alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: '#16c783', borderRadius: 17, borderBottomRightRadius: 5, paddingHorizontal: 14, paddingVertical: 11 },
   userBubbleText: { color: '#07100f', lineHeight: 19, fontSize: 14, fontWeight: '600' },
-  triageComposer: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 10, paddingBottom: 2, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  triageComposer: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 10, paddingBottom: Platform.OS === 'android' ? 34 : 2, backgroundColor: themeColor('#e8efeb', '#07100f') },
   triageInput: { flex: 1, minHeight: 50, maxHeight: 105, backgroundColor: themeColor('#ffffff', '#101d1a'), borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: themeColor('#14201d', '#fff'), fontSize: 15 },
   sendButton: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#16c783', alignItems: 'center', justifyContent: 'center' },
   sendButtonDisabled: { opacity: .35 },
