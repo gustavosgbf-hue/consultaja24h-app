@@ -1,0 +1,28 @@
+name: Card checkout OTA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/card-checkout-ota.yml'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck current source
+        run: npx tsc --noEmit
+      - name: Verify Expo authentication
+        run: |
+          test -n "$EXPO_TOKEN"
+          npx eas-cli@latest whoami
+      - name: Publish production OTA
+        run: npx eas-cli@latest update --channel production --message "Desabilitar temporariamente pagamento por cartão" --non-interactive
