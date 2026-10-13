@@ -538,7 +538,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
         <View style={styles.header}>
           <Pressable onPress={onVoltar} style={styles.backButton} accessibilityLabel="Voltar"><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerCenter}>
