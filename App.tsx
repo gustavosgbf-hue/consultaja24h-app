@@ -1269,7 +1269,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     return (
       <Animated.View style={motion.style}>
       <SafeAreaView style={styles.safe}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
           <Animated.View style={[{ flex: 1 }, stageStyle]}>
           <View style={styles.pageWrapFlex}>
             <PageHeader title="Triagem" onVoltar={voltarEtapa} />
@@ -1306,11 +1306,11 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
               <TextInput
                 value={respostaTriagem}
                 onChangeText={setRespostaTriagem}
-                placeholder={triagemLoading ? 'Aguarde...' : 'Digite sua resposta...'}
+                placeholder={triagemLoading ? 'Prepare sua resposta...' : 'Digite sua resposta...'}
                 placeholderTextColor="#66736e"
                 style={styles.triageInput}
                 multiline={false}
-      editable={!triagemLoading && !!perguntaAtual}
+      editable={true}
                 maxLength={700}
       returnKeyType="send"
       blurOnSubmit={false}
