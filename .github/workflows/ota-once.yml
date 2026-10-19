@@ -35,4 +35,4 @@ jobs:
           fi
 
       - name: Publish OTA to production
-        run: npx eas-cli@latest update --channel production --message "Fix Android patient chat composer above navigation bar" --non-interactive
+        run: npx eas-cli@latest update --channel production --message "Fix Android patient chat composer — typecheck compatibility" --non-interactive
