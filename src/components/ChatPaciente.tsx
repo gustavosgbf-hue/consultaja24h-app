@@ -7,6 +7,7 @@ import {
   Linking,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Modal,
   PanResponder,
   Platform,
@@ -341,6 +342,7 @@ function AvaliacaoConsulta({ atendimentoId, medicoNome }: { atendimentoId: numbe
 export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, somenteLeitura = false, avaliavel = false }: Props) {
   const [mensagens, setMensagens] = useState<MensagemChatV2[]>([]);
   const [texto, setTexto] = useState('');
+  const [tecladoAberto, setTecladoAberto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
@@ -351,6 +353,13 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
   const attachmentAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView | null>(null);
   const inputRef = useRef<TextInput | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', () => setTecladoAberto(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setTecladoAberto(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   useEffect(() => {
     let ativo = true;
@@ -604,7 +613,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
         )}
 
         {!somenteLeitura ? (
-          <View style={styles.composerArea}>
+          <View style={[styles.composerArea, Platform.OS === 'android' && { paddingBottom: tecladoAberto ? 8 : 84 }]}>
             {respondendo ? (
               <View style={styles.replyComposer}>
                 <View style={styles.replyComposerBody}>
@@ -690,7 +699,7 @@ export default function ChatPaciente({ atendimentoId, medicoNome, onVoltar, some
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
   screen: { flex: 1, backgroundColor: themeColor('#e8efeb', '#07100f') },
-  header: { minHeight: 86, paddingHorizontal: 14, paddingTop: 7, paddingBottom: 11, flexDirection: 'row', alignItems: 'center' },
+  header: { minHeight: 86, paddingHorizontal: 14, paddingTop: Platform.OS === 'android' ? 30 : 7, paddingBottom: 11, flexDirection: 'row', alignItems: 'center' },
   backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: themeColor('#e4ece7', '#0d1916') },
   backText: { color: themeColor('#14201d', '#eef5f1'), fontSize: 34, lineHeight: 36, marginTop: -3 },
   headerCenter: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 6 },
@@ -750,7 +759,7 @@ const styles = StyleSheet.create({
   audioProgress: { height: 3, borderRadius: 2, backgroundColor: '#16c783' },
   audioTime: { marginTop: 5, color: themeColor('#66736e', '#7f9189'), fontSize: 9.5 },
   error: { color: '#f29aa1', textAlign: 'center', fontSize: 11.5, marginTop: 12 },
-  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 6 : 34, backgroundColor: themeColor('#e8efeb', '#07100f') },
+  composerArea: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: 6, backgroundColor: themeColor('#e8efeb', '#07100f') },
   composer: { minHeight: 52, flexDirection: 'row', alignItems: 'flex-end', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 19, padding: 5 },
   iconButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, minHeight: 42, maxHeight: 110, paddingHorizontal: 4, paddingVertical: 10, color: themeColor('#14201d', '#eef5f1'), fontSize: 15 },
@@ -758,7 +767,7 @@ const styles = StyleSheet.create({
   sendDisabled: { opacity: 0.55 },
   attachmentOverlay: { ...StyleSheet.absoluteFill, zIndex: 50 },
   attachmentBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
-  attachmentMenu: { position: 'absolute', left: 12, bottom: Platform.OS === 'ios' ? 82 : 72, flexDirection: 'row', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 18, padding: 8, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 7 }, elevation: 9 },
+  attachmentMenu: { position: 'absolute', left: 12, bottom: Platform.OS === 'ios' ? 82 : 126, flexDirection: 'row', gap: 7, backgroundColor: themeColor('#f7faf8', '#0d1916'), borderRadius: 18, padding: 8, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 7 }, elevation: 9 },
   attachmentOption: { width: 76, minHeight: 67, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: themeColor('#edf3ef', '#101d1a') },
   attachmentIcon: { height: 23, justifyContent: 'center' },
   attachmentLabel: { color: themeColor('#52605b', '#a9b5b0'), fontSize: 10.5, fontWeight: '600' },
