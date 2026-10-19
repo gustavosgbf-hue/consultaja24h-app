@@ -17,6 +17,7 @@ function themeColor(light: string, dark: string) {
 import LegacyApp from '../App';
 import {
   carregarAtendimentoEmAndamento,
+  consultarStatusAtendimento,
   type AtendimentoEmAndamento,
 } from './api/client';
 import AtendimentoAtual from './components/AtendimentoAtual';
@@ -82,7 +83,25 @@ export default function AppRoot() {
       try {
         const data = await carregarAtendimentoEmAndamento();
         if (!ativo) return;
-        const atual = data.atendimento || null;
+        let atual = data.atendimento || null;
+        // A rota de status consulta o PagBank diretamente quando o webhook
+        // ainda não confirmou o PIX. Recarregar evita prender o paciente
+        // na etapa de pagamento apesar da cobrança já aprovada.
+        if (atual?.etapa === 'pagamento' && atual.pagbank_order_id) {
+          try {
+            const situacao = await consultarStatusAtendimento(atual.id);
+            if (situacao.atendimento?.pagamento_status === 'confirmado') {
+              const atualizado = await carregarAtendimentoEmAndamento();
+              if (!ativo) return;
+              atual = atualizado.atendimento || atual;
+              if (atual.etapa === 'pagamento') {
+                atual = { ...atual, pagamento_status: 'confirmado', etapa: 'triagem' };
+              }
+            }
+          } catch {
+            // A sincronização será tentada novamente no próximo polling.
+          }
+        }
 
         if (!atual) {
           if (etapaRef.current === 'chat' && !chatFechadoManualRef.current) {
