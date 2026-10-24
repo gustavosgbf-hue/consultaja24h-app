@@ -1048,7 +1048,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     if (!atendimentoInicial?.id) return;
     setAtendimentoPagoId(atendimentoInicial.id);
     const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
-    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') ? queixaSalva : 'Queixa informada anteriormente';
+    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') ? queixaSalva : '';
     setQueixa(queixaBase);
 
     if (atendimentoInicial.etapa === 'pagamento') {
@@ -1060,7 +1060,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       return;
     }
     if (atendimentoInicial.etapa === 'triagem') {
-      const history: TriageMessage[] = [{ role: 'user', content: `Queixa inicial informada pelo paciente: ${queixaBase}` }];
+      const history: TriageMessage[] = queixaBase ? [{ role: 'user', content: `Queixa inicial informada pelo paciente: ${queixaBase}` }] : [];
       setTriageMessages(history);
       setPerguntaAtual('');
       setRespostaTriagem('');
