@@ -35,4 +35,4 @@ jobs:
           fi
 
       - name: Publish OTA to production
-        run: npx eas-cli@latest update --channel production --message "Fix Android patient chat composer — typecheck compatibility" --non-interactive
+        run: npx eas-cli@latest update --channel production --message "Fix confirmed PIX triage recovery and missing complaint" --non-interactive
