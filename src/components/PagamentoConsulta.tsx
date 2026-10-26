@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
@@ -46,6 +46,9 @@ export default function PagamentoConsulta({
   onVoltar,
   onPagamentoConfirmado,
 }: Props) {
+  const pagamentoConcluidoRef = useRef(false);
+  const confirmarCallbackRef = useRef(onPagamentoConfirmado);
+  confirmarCallbackRef.current = onPagamentoConfirmado;
   const [metodo, setMetodo] = useState<Metodo>('pix');
   const [loading, setLoading] = useState(false);
   const [atendimentoId, setAtendimentoId] = useState<number | null>(null);
@@ -64,8 +67,10 @@ export default function PagamentoConsulta({
   const cardEnabled = CARD_ENABLED || modoReview;
 
   function confirmarPagamento(id: number) {
+    if (pagamentoConcluidoRef.current) return;
+    pagamentoConcluidoRef.current = true;
     void trackIosEvent('ios_payment_confirmed', id);
-    onPagamentoConfirmado(id);
+    confirmarCallbackRef.current(id);
   }
 
   async function garantirAtendimento() {
@@ -99,9 +104,17 @@ export default function PagamentoConsulta({
       if (!ativo || checando) return;
       checando = true;
       try {
-        const pix = await consultarStatusPix(orderId);
+        // A consulta do PagBank pode falhar temporariamente; isso não deve
+        // impedir a checagem do estado confirmado no backend.
+        let pagoNoProvedor = false;
+        try {
+          const pix = await consultarStatusPix(orderId);
+          pagoNoProvedor = pix.pago === true;
+        } catch {
+          // Continua para a reconciliação pelo atendimento.
+        }
         if (!ativo) return;
-        if (pix.pago) {
+        if (pagoNoProvedor) {
           setStatus('Pagamento confirmado');
           ativo = false;
           confirmarPagamento(atendimentoId!);
@@ -129,7 +142,7 @@ export default function PagamentoConsulta({
       ativo = false;
       clearInterval(timer);
     };
-  }, [orderId, atendimentoId, onPagamentoConfirmado]);
+  }, [orderId, atendimentoId]);
 
   useEffect(() => {
     if (!cartaoPendente || !atendimentoId) return;
@@ -163,7 +176,7 @@ export default function PagamentoConsulta({
       ativo = false;
       clearInterval(timer);
     };
-  }, [cartaoPendente, atendimentoId, onPagamentoConfirmado]);
+  }, [cartaoPendente, atendimentoId]);
 
   async function gerarPix() {
     if (loading || pixCode) return;
@@ -268,8 +281,9 @@ export default function PagamentoConsulta({
     setStatus('Verificando pagamento…');
     try {
       if (orderId) {
-        const pix = await consultarStatusPix(orderId);
-        if (pix.pago) {
+        let pagoNoProvedor = false;
+        try { pagoNoProvedor = (await consultarStatusPix(orderId)).pago === true; } catch { /* consultar backend abaixo */ }
+        if (pagoNoProvedor) {
           setStatus('Pagamento confirmado');
           confirmarPagamento(atendimentoId);
           return;
