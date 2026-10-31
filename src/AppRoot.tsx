@@ -206,7 +206,7 @@ export default function AppRoot() {
 
   const betaEmTriagem = atendimento?.etapa === 'triagem' && atendimento.pagamento_metodo === 'beta_test';
 
-  if (modoAtendimento && atendimento && !betaEmTriagem) {
+  if (modoAtendimento && atendimento && atendimento.etapa !== 'triagem' && atendimento.etapa !== 'pagamento' && !betaEmTriagem) {
     return (
       <AtendimentoAtualAnimado
         atendimento={atendimento}
@@ -229,7 +229,7 @@ export default function AppRoot() {
     );
   }
 
-  if (atendimento && !mostrarInicio && !betaEmTriagem) {
+  if (atendimento && atendimento.etapa !== 'triagem' && atendimento.etapa !== 'pagamento' && !mostrarInicio && !betaEmTriagem) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
@@ -256,8 +256,8 @@ export default function AppRoot() {
 
   return (
     <View style={styles.appWrap}>
-      <LegacyApp />
-      {atendimento && atendimento.etapa !== 'triagem' && !betaEmTriagem ? (
+      <LegacyApp resumeTriagem={atendimento?.etapa === 'triagem' ? atendimento : null} />
+      {atendimento && atendimento.etapa !== 'triagem' && atendimento.etapa !== 'pagamento' && !betaEmTriagem ? (
         <Pressable
           onPress={() => {
             chatFechadoManualRef.current = false;

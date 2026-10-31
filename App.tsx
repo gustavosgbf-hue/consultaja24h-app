@@ -68,7 +68,7 @@ Faça NO MÁXIMO 3 perguntas clínicas adicionais, priorizando somente o que mud
 Depois das perguntas clínicas e ANTES de concluir, pergunte obrigatoriamente, em uma pergunta separada, se o paciente precisa de atestado, receita, declaração ou outro documento nesta consulta.
 Não faça diagnóstico, não prescreva, não prometa atestado e não substitua o médico.
 Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda finalize o resumo para o médico.
-Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
+Nunca presuma ausência de alergias, medicamentos, comorbidades ou gestação: se não foram perguntados ou respondidos, escreva "Não informado". Preserve o relato original e não transforme suposições em fatos. Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
 Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
 type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
@@ -215,7 +215,7 @@ function usePageSlide(onClose: () => void) {
   };
 }
 
-export default function App() {
+export default function App({ resumeTriagem = null }: { resumeTriagem?: AtendimentoEmAndamento | null }) {
   const [booting, setBooting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [homeLoading, setHomeLoading] = useState(false);
@@ -244,6 +244,15 @@ export default function App() {
   useEffect(() => {
     restaurarSessao();
   }, []);
+
+  // Uma consulta paga que retornou do background deve abrir a triagem real,
+  // nunca ficar presa em uma tela informativa sem campo de resposta.
+  useEffect(() => {
+    if (!paciente || !resumeTriagem || resumeTriagem.etapa !== 'triagem' || tela !== 'home') return;
+    setAtendimentoEmAndamento(resumeTriagem);
+    setRetomarAtendimento((atual) => atual?.id === resumeTriagem.id ? atual : resumeTriagem);
+    setTela('nova-consulta');
+  }, [paciente, resumeTriagem?.id, resumeTriagem?.etapa, tela]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -1007,6 +1016,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   const [respostaTriagem, setRespostaTriagem] = useState('');
   const [triagemResumo, setTriagemResumo] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
+  const [triagemErro, setTriagemErro] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
   const motion = usePageSlide(onVoltar);
   const stageX = useRef(new Animated.Value(0)).current;
@@ -1047,8 +1057,14 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   useEffect(() => {
     if (!atendimentoInicial?.id) return;
     setAtendimentoPagoId(atendimentoInicial.id);
+    if (atendimentoInicial.atendimento_para_terceiro) {
+      setPara('outra-pessoa');
+      setNomeOutro(String(atendimentoInicial.nome || ''));
+      setCpfOutro(digits(atendimentoInicial.cpf));
+      setNascimentoOutro(String(atendimentoInicial.data_nascimento || ''));
+    }
     const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
-    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') ? queixaSalva : '';
+    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') && !/^(queixa (não |nao )?informada|queixa informada anteriormente)$/i.test(queixaSalva) ? queixaSalva : '';
     setQueixa(queixaBase);
 
     if (atendimentoInicial.etapa === 'pagamento') {
@@ -1060,15 +1076,16 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       return;
     }
     if (atendimentoInicial.etapa === 'triagem') {
-      const history: TriageMessage[] = queixaBase ? [{ role: 'user', content: `Queixa inicial informada pelo paciente: ${queixaBase}` }] : [];
+      const history: TriageMessage[] = [{ role: 'user', content: queixaBase ? `Queixa inicial informada pelo paciente: ${queixaBase}` : 'O paciente não conseguiu registrar sua queixa inicial. Pergunte qual é o motivo da consulta antes das outras perguntas.' }];
       setTriageMessages(history);
       setPerguntaAtual('');
       setRespostaTriagem('');
       setEtapaConsulta('triagem');
+      setTriagemErro(false);
       setTriagemLoading(true);
       conversarTriagem(SYSTEM_TRIAGE, history)
         .then((data) => tratarRetornoTriagem(data.text, history, atendimentoInicial.id))
-        .catch(() => Alert.alert('Triagem', 'Não foi possível retomar a triagem agora. Tente novamente em instantes.'))
+        .catch(() => { setTriagemErro(true); Alert.alert('Triagem', 'Não foi possível retomar a triagem agora. Toque em Tentar novamente.'); })
         .finally(() => setTriagemLoading(false));
     }
   }, [atendimentoInicial?.id]);
@@ -1148,6 +1165,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     const history: TriageMessage[] = [
       { role: 'user', content: `Queixa inicial informada pelo paciente: ${queixa.trim()}` },
     ];
+    setTriagemErro(false);
     setTriagemLoading(true);
     mudarEtapa('triagem', 1);
     setTriageMessages(history);
@@ -1157,7 +1175,8 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       const data = await conversarTriagem(SYSTEM_TRIAGE, history);
       await tratarRetornoTriagem(data.text, history, atendimentoId);
     } catch (error) {
-      Alert.alert('Pagamento confirmado', 'O pagamento foi confirmado, mas não conseguimos iniciar a triagem agora. Tente novamente em instantes.');
+      setTriagemErro(true);
+      Alert.alert('Pagamento confirmado', 'A consulta já está paga. Toque em Tentar novamente para iniciar a triagem.');
     } finally {
       setTriagemLoading(false);
     }
@@ -1171,11 +1190,11 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     setTriagemLoading(true);
     try {
       await atualizarAtendimento(atendimentoId, {
-        nome: pacienteNomeSelecionado,
-        telefone: telefoneContato,
-        cpf: pacienteCpfSelecionado,
+        nome: pacienteNomeSelecionado || String(atendimentoInicial?.nome || '').trim(),
+        telefone: telefoneContato || digits(atendimentoInicial?.tel),
+        cpf: pacienteCpfSelecionado || digits(atendimentoInicial?.cpf),
         email: paciente.email || undefined,
-        dataNascimento: pacienteNascimentoSelecionado,
+        dataNascimento: pacienteNascimentoSelecionado || String(atendimentoInicial?.data_nascimento || ''),
         triagem: resumo || queixa.trim(),
         atendimentoParaTerceiro: para === 'outra-pessoa',
       });
@@ -1216,6 +1235,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   async function enviarRespostaTriagem() {
     const resposta = respostaTriagem.trim();
     if (!resposta || triagemLoading || !atendimentoPagoId) return;
+    const perguntaAnterior = perguntaAtual;
     const history: TriageMessage[] = [...triageMessages, { role: 'user', content: resposta }];
     setRespostaTriagem('');
     setPerguntaAtual('');
@@ -1225,7 +1245,10 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       const data = await conversarTriagem(SYSTEM_TRIAGE, history);
       await tratarRetornoTriagem(data.text, history, atendimentoPagoId);
     } catch (error) {
-      Alert.alert('Não foi possível continuar', error instanceof Error ? error.message : 'Tente novamente.');
+      setRespostaTriagem(resposta);
+      setPerguntaAtual(perguntaAnterior);
+      setTriageMessages(triageMessages);
+      Alert.alert('Não foi possível continuar', 'Sua resposta foi mantida. Tente enviar novamente.');
     } finally {
       setTriagemLoading(false);
     }
@@ -1290,6 +1313,29 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
                   <View key={`${index}-${msg.content.slice(0, 8)}`} style={styles.userBubble}><Text style={styles.userBubbleText}>{msg.content}</Text></View>
                 )
               ))}
+              {triagemErro && !triagemLoading ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    if (!atendimentoPagoId) return;
+                    setTriagemErro(false);
+                    setTriagemLoading(true);
+                    try {
+                      const history = triageMessages.length ? triageMessages : [{ role: 'user' as const, content: 'Pergunte o motivo da consulta do paciente.' }];
+                      const data = await conversarTriagem(SYSTEM_TRIAGE, history);
+                      await tratarRetornoTriagem(data.text, history, atendimentoPagoId);
+                    } catch {
+                      setTriagemErro(true);
+                      Alert.alert('Não foi possível conectar', 'Sua consulta continua paga. Tente novamente.');
+                    } finally {
+                      setTriagemLoading(false);
+                    }
+                  }}
+                  style={{ alignSelf: 'center', backgroundColor: '#16c783', paddingVertical: 13, paddingHorizontal: 20, borderRadius: 14 }}
+                >
+                  <Text style={{ color: '#07100f', fontWeight: '800' }}>Tentar novamente</Text>
+                </Pressable>
+              ) : null}
               {triagemLoading && !perguntaAtual ? (
                 <View style={styles.aiBubble}>
                   <Text style={styles.aiBubbleLabel}>TRIAGEM</Text>
