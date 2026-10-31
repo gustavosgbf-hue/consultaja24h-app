@@ -394,3 +394,18 @@ export async function solicitarExclusaoConta() {
     true,
   );
 }
+
+// Stripe Checkout Sessions: apenas o backend cria cobranças e reconcilia pagamentos.
+export async function buscarConfigStripe() {
+  const response = await fetch(`${API_BASE_URL}/api/stripe/config`);
+  return parseJson<{ ok: boolean; enabled: boolean; publishableKey: string | null; mode: string }>(response);
+}
+
+export async function criarSessaoStripe(atendimentoId: number, email?: string) {
+  return postJson<{ ok: boolean; sessionId: string; clientSecret: string }>('/api/stripe/checkout-session', { atendimentoId, email });
+}
+
+export async function consultarSessaoStripe(sessionId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/stripe/session-status?session_id=${encodeURIComponent(sessionId)}`);
+  return parseJson<{ ok: boolean; paid: boolean; atendimentoId?: number; payment_status?: string }>(response);
+}

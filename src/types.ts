@@ -4,6 +4,7 @@ export type Paciente = {
   email: string;
   cpf?: string | null;
   tel?: string | null;
+  data_nascimento?: string | null;
 };
 
 export type Agendamento = {

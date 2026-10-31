@@ -4,6 +4,9 @@ import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import {
   cobrarCartaoConsulta,
+  buscarConfigStripe,
+  criarSessaoStripe,
+  consultarSessaoStripe,
   consultarStatusAtendimento,
   consultarStatusPix,
   gerarPixConsulta,
@@ -12,7 +15,7 @@ import {
 } from '../api/client';
 import type { Paciente } from '../types';
 import { trackIosEvent } from '../attribution/iosTelemetry';
-import EfiCardForm from './EfiCardForm';
+import StripeCardForm from './StripeCardForm';
 
 type Props = {
   pacienteLogado: Paciente;
@@ -26,7 +29,7 @@ type Props = {
 
 type Metodo = 'pix' | 'cartao';
 
-const CARD_ENABLED = false;
+const CARD_ENABLED = true;
 
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
@@ -60,6 +63,8 @@ export default function PagamentoConsulta({
   const [cartaoPendente, setCartaoPendente] = useState(false);
   const [cartaoMask, setCartaoMask] = useState('');
   const [cartaoFormKey, setCartaoFormKey] = useState(0);
+  const [stripeConfig, setStripeConfig] = useState<{ publishableKey: string } | null>(null);
+  const [stripeSession, setStripeSession] = useState<{ clientSecret: string; sessionId: string } | null>(null);
 
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
@@ -162,9 +167,9 @@ export default function PagamentoConsulta({
           confirmarPagamento(atendimentoId!);
           return;
         }
-        setStatus('Cartão recebido · aguardando confirmação da Efí…');
+        setStatus('Aguardando confirmação da Stripe…');
       } catch {
-        if (ativo) setStatus('Aguardando confirmação da Efí…');
+        if (ativo) setStatus('Aguardando confirmação da Stripe…');
       } finally {
         checando = false;
       }
@@ -269,6 +274,46 @@ export default function PagamentoConsulta({
     }
   }
 
+  async function iniciarCartaoStripe() {
+    if (loading || stripeSession) return;
+    setLoading(true);
+    try {
+      const cfg = await buscarConfigStripe();
+      if (!cfg.enabled || !cfg.publishableKey || cfg.mode !== 'live') throw new Error('Pagamento com cartão temporariamente indisponível.');
+      const id = await garantirAtendimento();
+      const sessao = await criarSessaoStripe(id, pacienteLogado.email || undefined);
+      if (!sessao.clientSecret || !sessao.sessionId) throw new Error('A Stripe não retornou uma sessão válida.');
+      setStripeConfig({ publishableKey: cfg.publishableKey });
+      setStripeSession({ clientSecret: sessao.clientSecret, sessionId: sessao.sessionId });
+      setStatus('Pagamento seguro pela Stripe');
+    } catch (error) {
+      Alert.alert('Cartão', error instanceof Error ? error.message : 'Não foi possível iniciar o pagamento.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verificarStripe() {
+    if (!atendimentoId || !stripeSession) return;
+    try {
+      const resultado = await consultarSessaoStripe(stripeSession.sessionId);
+      if (resultado.paid && resultado.atendimentoId === atendimentoId) {
+        setStatus('Pagamento confirmado');
+        confirmarPagamento(atendimentoId);
+      } else {
+        setStatus('Aguardando confirmação da Stripe…');
+      }
+    } catch {
+      // O webhook é a confirmação definitiva; o polling também reconcilia a sessão.
+    }
+  }
+
+  useEffect(() => {
+    if (!stripeSession || !atendimentoId || pagamentoConcluidoRef.current) return;
+    const timer = setInterval(() => { void verificarStripe(); }, 3000);
+    return () => clearInterval(timer);
+  }, [stripeSession, atendimentoId]);
+
   async function copiarPix() {
     if (!pixCode) return;
     await Clipboard.setStringAsync(pixCode);
@@ -335,7 +380,7 @@ export default function PagamentoConsulta({
               style={[styles.tab, metodo === 'cartao' && styles.tabActive, !cardEnabled && styles.tabDisabled]}
             >
               <Text style={[styles.tabText, metodo === 'cartao' && styles.tabTextActive, !cardEnabled && styles.tabTextDisabled]}>Cartão</Text>
-              <Text style={[styles.tabHint, !cardEnabled && styles.tabHintDisabled]}>{cardEnabled ? 'Efí' : 'Temporariamente indisponível'}</Text>
+              <Text style={[styles.tabHint, !cardEnabled && styles.tabHintDisabled]}>{cardEnabled ? 'Stripe' : 'Temporariamente indisponível'}</Text>
             </Pressable>
           </View>
 
@@ -358,11 +403,11 @@ export default function PagamentoConsulta({
               <View style={styles.methodHeader}>
                 <View>
                   <Text style={styles.methodTitle}>Cartão de crédito</Text>
-                  <Text style={styles.methodSubtitle}>Processamento seguro pela Efí</Text>
+                  <Text style={styles.methodSubtitle}>Processamento seguro pela Stripe</Text>
                 </View>
                 <View style={styles.secureBadge}><Text style={styles.secureBadgeText}>TOKENIZADO</Text></View>
               </View>
-              <Text style={styles.methodText}>Os dados sensíveis ficam dentro do ambiente de tokenização da Efí. O servidor recebe somente o token do cartão.</Text>
+              <Text style={styles.methodText}>Os dados do cartão são processados pela Stripe e não passam pelos servidores da ConsultaJá24h.</Text>
               {modoReview ? (
                 <>
                   <Text style={styles.methodText}>Para a revisão da App Store, use o cartão de teste abaixo. Nenhum dado real é necessário.</Text>
@@ -380,15 +425,17 @@ export default function PagamentoConsulta({
                   </Pressable>
                 </>
               ) : (
-                              <EfiCardForm
-                                key={cartaoFormKey}
-                                holderName={pacienteLogado.nome}
-                                holderDocument={pagadorCpf}
-                                disabled={bloqueado}
-                                onToken={processarTokenCartao}
-                                onError={(message) => Alert.alert('Cartão', message)}
-                              />
-                              )}
+                stripeSession && stripeConfig ? (
+                  <>
+                    <StripeCardForm publishableKey={stripeConfig.publishableKey} clientSecret={stripeSession.clientSecret} email={pacienteLogado.email || ''} onCheck={() => { void verificarStripe(); }} onError={(message) => setStatus(message)} />
+                    <Pressable onPress={() => { void verificarStripe(); }} style={styles.verifyButton}><Text style={styles.verifyText}>Já paguei · verificar agora</Text></Pressable>
+                  </>
+                ) : (
+                  <Pressable onPress={() => { void iniciarCartaoStripe(); }} disabled={loading} style={[styles.primaryButton, loading && { opacity: .65 }]}>
+                    {loading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.primaryButtonText}>Pagar com cartão</Text>}
+                  </Pressable>
+                )
+              )}
               {loading ? <View style={styles.inlineStatus}><ActivityIndicator color="#16c783" /><Text style={styles.statusText}>{status || 'Processando…'}</Text></View> : null}
             </View>
           )}
@@ -413,7 +460,7 @@ export default function PagamentoConsulta({
           <View style={styles.waitingIcon}><Text style={styles.waitingIconText}>✓</Text></View>
           <Text style={styles.waitingTitle}>Cartão enviado para análise</Text>
           <Text style={styles.waitingText}>{cartaoMask ? `Cartão ${cartaoMask}. ` : ''}A Efí está concluindo a confirmação. Esta tela avança automaticamente quando o pagamento for aprovado.</Text>
-          <View style={styles.statusRow}><ActivityIndicator size="small" color="#16c783" /><Text style={styles.statusText}>{status || 'Aguardando confirmação da Efí…'}</Text></View>
+          <View style={styles.statusRow}><ActivityIndicator size="small" color="#16c783" /><Text style={styles.statusText}>{status || 'Aguardando confirmação da Stripe…'}</Text></View>
           <Pressable onPress={verificarAgora} style={styles.verifyButton}><Text style={styles.verifyText}>Verificar agora</Text></Pressable>
         </View>
       )}
