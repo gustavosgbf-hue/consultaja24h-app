@@ -1015,6 +1015,9 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   const [perguntaAtual, setPerguntaAtual] = useState('');
   const [respostaTriagem, setRespostaTriagem] = useState('');
   const [triagemResumo, setTriagemResumo] = useState('');
+  const [nomeParaFinalizar, setNomeParaFinalizar] = useState('');
+  const [precisaConfirmarNome, setPrecisaConfirmarNome] = useState(false);
+  const [resumoParaFinalizar, setResumoParaFinalizar] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
   const [triagemErro, setTriagemErro] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
@@ -1076,6 +1079,21 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       return;
     }
     if (atendimentoInicial.etapa === 'triagem') {
+      // An older app could save the clinical summary but fail to join the queue
+      // because its account name was still 'Paciente'. Resume directly at name
+      // confirmation, without redoing the clinical triage or losing payment.
+      const savedSummary = String(atendimentoInicial.triagem || '').trim();
+      const savedName = String(atendimentoInicial.nome || '').trim();
+      if (savedSummary && !savedSummary.startsWith('(') &&
+          !/^(queixa (não |nao )?informada|queixa informada anteriormente)$/i.test(savedSummary) &&
+          (!savedName || /^(paciente|paciente whatsapp|-)$/i.test(savedName))) {
+        setResumoParaFinalizar(savedSummary);
+        setNomeParaFinalizar('');
+        setPrecisaConfirmarNome(true);
+        setEtapaConsulta('triagem');
+        setTriagemLoading(false);
+        return;
+      }
       const history: TriageMessage[] = [{ role: 'user', content: queixaBase ? `Queixa inicial informada pelo paciente: ${queixaBase}` : 'O paciente não conseguiu registrar sua queixa inicial. Pergunte qual é o motivo da consulta antes das outras perguntas.' }];
       setTriageMessages(history);
       setPerguntaAtual('');
@@ -1182,25 +1200,51 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     }
   }
 
-  async function concluirTriagem(resumo: string, history: TriageMessage[], atendimentoId: number) {
-    setTriagemResumo(resumo || queixa.trim());
+  function nomeClinicoValido(value: string) {
+    const name = String(value || '').trim().replace(/\s+/g, ' ');
+    return name.split(' ').filter(Boolean).length >= 2 &&
+      !/^(paciente|paciente whatsapp|-)$/i.test(name);
+  }
+
+  async function concluirTriagem(resumo: string, history: TriageMessage[], atendimentoId: number, nomeConfirmado?: string) {
+    const resumoFinal = String(resumo || queixa.trim()).trim();
+    setTriagemResumo(resumoFinal);
     setPerguntaAtual('');
-    // O prefixo TRIAGEM_CONCLUIDA é protocolo interno e nunca deve aparecer para o paciente.
     setTriageMessages(history);
+    const nomeAtual = String(nomeConfirmado || pacienteNomeSelecionado || nomeProprio || atendimentoInicial?.nome || '').trim();
+    // Never send the generic 'Paciente' to the server after payment.
+    // Ask once for the real name, for both Android and iOS (Alert.prompt is iOS only).
+    if (!nomeClinicoValido(nomeAtual)) {
+      setResumoParaFinalizar(resumoFinal);
+      setNomeParaFinalizar(nomeClinicoValido(nomeProprio) ? nomeProprio : '');
+      setPrecisaConfirmarNome(true);
+      setTriagemErro(false);
+      return;
+    }
     setTriagemLoading(true);
     try {
       await atualizarAtendimento(atendimentoId, {
-        nome: pacienteNomeSelecionado || String(atendimentoInicial?.nome || '').trim(),
+        nome: nomeAtual,
         telefone: telefoneContato || digits(atendimentoInicial?.tel),
         cpf: pacienteCpfSelecionado || digits(atendimentoInicial?.cpf),
         email: paciente.email || undefined,
         dataNascimento: pacienteNascimentoSelecionado || String(atendimentoInicial?.data_nascimento || ''),
-        triagem: resumo || queixa.trim(),
+        triagem: resumoFinal,
         atendimentoParaTerceiro: para === 'outra-pessoa',
       });
+      setPrecisaConfirmarNome(false);
+      setResumoParaFinalizar('');
       mudarEtapa('fila', 1);
     } catch (error) {
-      Alert.alert('Triagem concluída', 'A triagem terminou, mas não conseguimos salvar o resumo no atendimento. Tente novamente.');
+      const msg = error instanceof Error ? error.message : '';
+      // Preserve summary for retry; never send the patient back through the LLM.
+      setResumoParaFinalizar(resumoFinal);
+      setNomeParaFinalizar(nomeAtual);
+      setPrecisaConfirmarNome(true);
+      Alert.alert('Não foi possível finalizar',
+        msg === 'nome_paciente_obrigatorio'
+          ? 'Confirme o nome completo do paciente para liberar a consulta já paga.'
+          : 'A consulta já está paga. O resumo foi mantido; confirme os dados e tente enviar novamente.');
     } finally {
       setTriagemLoading(false);
     }
@@ -1302,9 +1346,33 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
               <View style={styles.liveDot} />
               <Text style={styles.triageProgressText}>TRIAGEM RÁPIDA · {Math.min(respostasPaciente.length + 1, 4)}/4</Text>
             </View>
-            <Text style={styles.pageLead}>Só mais algumas perguntas para organizar seu quadro antes do médico.</Text>
+            <Text style={styles.pageLead}>{precisaConfirmarNome ? 'Triagem concluída. Confirme o nome do paciente para liberar a consulta já paga.' : 'Só mais algumas perguntas para organizar seu quadro antes do médico.'}</Text>
 
-            <ScrollView style={styles.triageChat} contentContainerStyle={styles.triageChatContent} keyboardShouldPersistTaps="handled">
+            {precisaConfirmarNome ? (
+              <View style={{ backgroundColor: '#132b22', borderRadius: 16, padding: 18, marginTop: 18, gap: 12 }}>
+                <Text style={{ color: '#e8f8ed', fontSize: 17, fontWeight: '800' }}>Nome completo do paciente</Text>
+                <Text style={{ color: '#b5cdc0', fontSize: 13 }}>O pagamento foi confirmado e a triagem foi preservada. Só falta confirmar o nome para enviar ao médico.</Text>
+                <TextInput
+                  value={nomeParaFinalizar}
+                  onChangeText={setNomeParaFinalizar}
+                  placeholder="Nome e sobrenome"
+                  placeholderTextColor="#83978b"
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  accessibilityLabel="Nome completo do paciente"
+                  style={{ color: '#ffffff', backgroundColor: '#07140d', borderWidth: 1, borderColor: '#3e6a54', borderRadius: 12, padding: 14, fontSize: 16 }}
+                />
+                <Pressable
+                  disabled={triagemLoading || !nomeClinicoValido(nomeParaFinalizar)}
+                  onPress={() => { if (atendimentoPagoId) concluirTriagem(resumoParaFinalizar || triagemResumo || queixa.trim(), triageMessages, atendimentoPagoId, nomeParaFinalizar); }}
+                  style={{ backgroundColor: '#16c783', opacity: triagemLoading || !nomeClinicoValido(nomeParaFinalizar) ? 0.5 : 1, padding: 15, borderRadius: 12, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#07100f', fontWeight: '800' }}>{triagemLoading ? 'Enviando…' : 'Enviar triagem ao médico'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {!precisaConfirmarNome ? <ScrollView style={styles.triageChat} contentContainerStyle={styles.triageChatContent} keyboardShouldPersistTaps="handled">
               <View style={styles.patientBubble}><Text style={styles.patientBubbleLabel}>VOCÊ INFORMOU</Text><Text style={styles.patientBubbleText}>{queixa.trim()}</Text></View>
               {triageMessages.slice(1).map((msg, index) => (
                 msg.role === 'assistant' ? (
@@ -1346,9 +1414,9 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
                   </View>
                 </View>
               ) : null}
-            </ScrollView>
+            </ScrollView> : null}
 
-            <View style={styles.triageComposer}>
+            {!precisaConfirmarNome ? <View style={styles.triageComposer}>
               <TextInput
                 value={respostaTriagem}
                 onChangeText={setRespostaTriagem}
@@ -1367,7 +1435,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
               <Pressable onPress={enviarRespostaTriagem} disabled={triagemLoading || !respostaTriagem.trim()} style={[styles.sendButton, (triagemLoading || !respostaTriagem.trim()) && styles.sendButtonDisabled]}>
                 {triagemLoading ? <ActivityIndicator color="#07100f" /> : <Text style={styles.sendButtonText}>↑</Text>}
               </Pressable>
-            </View>
+            </View> : null}
           </View>
           </Animated.View>
         </KeyboardAvoidingView>
