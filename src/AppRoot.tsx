@@ -26,6 +26,7 @@ import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/p
 import { emitPushNavigation } from './navigation/pushNavigation';
 import { initializeAndroidAttribution } from './attribution/installAttribution';
 import { trackIosEvent } from './attribution/iosTelemetry';
+import { tentarAvaliacaoAposEncerramento } from './storeReview';
 
 function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
   atendimento: AtendimentoEmAndamento;
@@ -104,8 +105,20 @@ export default function AppRoot() {
         }
 
         if (!atual) {
-          if (etapaRef.current === 'chat' && !chatFechadoManualRef.current) {
-            return;
+          // Quando a consulta foi encerrada no servidor, não manter o chat antigo
+          // aberto indefinidamente; verificação nativa segue fora da navegação.
+          if (etapaRef.current === 'chat' && atendimentoIdRef.current) {
+            try {
+              const encerrado = await consultarStatusAtendimento(atendimentoIdRef.current);
+              if (!ativo) return;
+              if (String(encerrado.atendimento?.status || '').toLowerCase() === 'encerrado') {
+                void tentarAvaliacaoAposEncerramento(atendimentoIdRef.current);
+              } else if (!chatFechadoManualRef.current) {
+                return;
+              }
+            } catch {
+              if (!chatFechadoManualRef.current) return;
+            }
           }
           atendimentoIdRef.current = null;
           etapaRef.current = null;
@@ -218,6 +231,7 @@ export default function AppRoot() {
         onAtualizado={(atual) => {
           setAtendimento(atual);
           if (!atual) {
+            if (atendimento.etapa === 'chat') void tentarAvaliacaoAposEncerramento(atendimento.id);
             atendimentoIdRef.current = null;
             etapaRef.current = null;
             chatFechadoManualRef.current = false;

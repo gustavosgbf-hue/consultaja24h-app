@@ -48,6 +48,7 @@ import {
 } from './src/auth/session';
 import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
+import { abrirAvaliacaoNaLoja } from './src/storeReview';
 import ThemeToggle from './src/components/ThemeToggle';
 import DocumentViewer from './src/components/DocumentViewer';
 import { setPushNavigationHandler } from './src/navigation/pushNavigation';
@@ -987,6 +988,9 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable onPress={() => { void abrirAvaliacaoNaLoja().catch(() => Alert.alert('Avaliar aplicativo', 'Não foi possível abrir a loja neste momento.')); }} style={styles.reviewButton} accessibilityRole="button" accessibilityLabel="Avaliar nosso aplicativo">
+          <Text style={styles.reviewButtonText}>Avaliar nosso aplicativo</Text>
+        </Pressable>
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -2001,6 +2005,8 @@ const styles = StyleSheet.create({
   profileNotice: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 16, padding: 16, marginTop: 14 },
   profileNoticeTitle: { color: themeColor('#0b8f61', '#78f25f'), fontWeight: '800', fontSize: 13 },
   profileNoticeText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 19, fontSize: 12.5, marginTop: 6 },
+  reviewButton: { borderWidth: 1, borderColor: '#16c783', backgroundColor: '#0c2a20', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  reviewButtonText: { color: '#78f25f', fontSize: 14, fontWeight: '800' },
   logoutButton: { borderWidth: 1, borderColor: '#603438', backgroundColor: '#1a1112', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
   logoutButtonText: { color: '#ff9ca5', fontSize: 14, fontWeight: '800' },
 
