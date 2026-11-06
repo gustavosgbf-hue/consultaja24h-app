@@ -26,6 +26,7 @@ import { observarToquesEmPush, registrarPushDoPaciente } from './notifications/p
 import { emitPushNavigation } from './navigation/pushNavigation';
 import { initializeAndroidAttribution } from './attribution/installAttribution';
 import { trackIosEvent } from './attribution/iosTelemetry';
+import { tentarAvaliacaoAposEncerramento } from './storeReview';
 
 function AtendimentoAtualAnimado({ atendimento, onVoltar, onAtualizado }: {
   atendimento: AtendimentoEmAndamento;
@@ -62,6 +63,7 @@ export default function AppRoot() {
   const [atendimento, setAtendimento] = useState<AtendimentoEmAndamento | null>(null);
   const [modoAtendimento, setModoAtendimento] = useState(false);
   const [mostrarInicio, setMostrarInicio] = useState(false);
+  const [conclusaoAtendimentoId, setConclusaoAtendimentoId] = useState<number | null>(null);
   const atendimentoIdRef = useRef<number | null>(null);
   const etapaRef = useRef<AtendimentoEmAndamento['etapa'] | null>(null);
   const chatFechadoManualRef = useRef(false);
@@ -104,8 +106,21 @@ export default function AppRoot() {
         }
 
         if (!atual) {
-          if (etapaRef.current === 'chat' && !chatFechadoManualRef.current) {
-            return;
+          // Quando a consulta foi encerrada no servidor, não manter o chat antigo
+          // aberto indefinidamente; verificação nativa segue fora da navegação.
+          if (etapaRef.current === 'chat' && atendimentoIdRef.current) {
+            try {
+              const encerrado = await consultarStatusAtendimento(atendimentoIdRef.current);
+              if (!ativo) return;
+              if (String(encerrado.atendimento?.status || '').toLowerCase() === 'encerrado') {
+                setConclusaoAtendimentoId(atendimentoIdRef.current);
+                void tentarAvaliacaoAposEncerramento(atendimentoIdRef.current);
+              } else if (!chatFechadoManualRef.current) {
+                return;
+              }
+            } catch {
+              if (!chatFechadoManualRef.current) return;
+            }
           }
           atendimentoIdRef.current = null;
           etapaRef.current = null;
@@ -218,6 +233,10 @@ export default function AppRoot() {
         onAtualizado={(atual) => {
           setAtendimento(atual);
           if (!atual) {
+            if (atendimento.etapa === 'chat') {
+              setConclusaoAtendimentoId(atendimento.id);
+              void tentarAvaliacaoAposEncerramento(atendimento.id);
+            }
             atendimentoIdRef.current = null;
             etapaRef.current = null;
             chatFechadoManualRef.current = false;
@@ -256,7 +275,7 @@ export default function AppRoot() {
 
   return (
     <View style={styles.appWrap}>
-      <LegacyApp resumeTriagem={atendimento?.etapa === 'triagem' ? atendimento : null} />
+      <LegacyApp resumeTriagem={atendimento?.etapa === 'triagem' ? atendimento : null} conclusaoAtendimentoId={conclusaoAtendimentoId} onFecharConclusao={() => setConclusaoAtendimentoId(null)} />
       {atendimento && atendimento.etapa !== 'triagem' && atendimento.etapa !== 'pagamento' && !betaEmTriagem ? (
         <Pressable
           onPress={() => {

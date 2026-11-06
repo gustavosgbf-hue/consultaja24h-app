@@ -48,6 +48,7 @@ import {
 } from './src/auth/session';
 import PagamentoConsulta from './src/components/PagamentoConsulta';
 import ChatPaciente from './src/components/ChatPaciente';
+import { abrirAvaliacaoNaLoja, verificarAvaliacaoPendenteNoRetorno } from './src/storeReview';
 import ThemeToggle from './src/components/ThemeToggle';
 import DocumentViewer from './src/components/DocumentViewer';
 import { setPushNavigationHandler } from './src/navigation/pushNavigation';
@@ -71,7 +72,7 @@ Se houver um sinal de alarme importante, deixe isso claro sem alarmismo e ainda 
 Nunca presuma ausência de alergias, medicamentos, comorbidades ou gestação: se não foram perguntados ou respondidos, escreva "Não informado". Preserve o relato original e não transforme suposições em fatos. Depois que a solicitação de documento tiver sido respondida, NÃO faça outra pergunta. Responda exatamente começando por TRIAGEM_CONCLUIDA: e depois gere um resumo clínico objetivo com: Queixa principal; Tempo/evolução; Intensidade/febre; Sintomas associados; Alergias; Comorbidades; Medicações em uso; Sinais de alarme; Solicitação/observações.
 Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunta clínica adicional e antes de o paciente responder sobre atestado/receita/declaração/outro documento.`;
 
-type Tela = 'home' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
+type Tela = 'home' | 'finalizacao' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
 type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
 const finalNavigationPolishApplied = true;
@@ -215,7 +216,7 @@ function usePageSlide(onClose: () => void) {
   };
 }
 
-export default function App({ resumeTriagem = null }: { resumeTriagem?: AtendimentoEmAndamento | null }) {
+export default function App({ resumeTriagem = null, conclusaoAtendimentoId = null, onFecharConclusao }: { resumeTriagem?: AtendimentoEmAndamento | null; conclusaoAtendimentoId?: number | null; onFecharConclusao?: () => void }) {
   const [booting, setBooting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [homeLoading, setHomeLoading] = useState(false);
@@ -244,6 +245,10 @@ export default function App({ resumeTriagem = null }: { resumeTriagem?: Atendime
   useEffect(() => {
     restaurarSessao();
   }, []);
+
+  useEffect(() => {
+    if (paciente && conclusaoAtendimentoId && tela === 'home') setTela('finalizacao');
+  }, [paciente, conclusaoAtendimentoId, tela]);
 
   // Uma consulta paga que retornou do background deve abrir a triagem real,
   // nunca ficar presa em uma tela informativa sem campo de resposta.
@@ -345,6 +350,10 @@ export default function App({ resumeTriagem = null }: { resumeTriagem?: Atendime
       if (docs) setDocumentos(docs.documentos || []);
       if (renewalData) setRenovacoes(renewalData.renovacoes || []);
       setAtendimentoEmAndamento(activeData?.atendimento || null);
+      if (history?.atendimentos) {
+        // Nunca prender o carregamento da página numa API de avaliação.
+        void verificarAvaliacaoPendenteNoRetorno(me.paciente.id, history.atendimentos, !!activeData?.atendimento);
+      }
     } finally {
       setHomeLoading(false);
     }
@@ -537,6 +546,26 @@ export default function App({ resumeTriagem = null }: { resumeTriagem?: Atendime
             </View>
           )}
         </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  if (tela === 'finalizacao') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 15 }}>
+          <View style={{ width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', backgroundColor: '#103f2d' }}>
+            <Text style={{ color: '#78f25f', fontSize: 31, fontWeight: '800' }}>✓</Text>
+          </View>
+          <Text style={{ fontSize: 29, fontWeight: '800', color: themeColor('#14201d', '#f1f7f3') }}>Atendimento finalizado</Text>
+          <Text style={{ color: themeColor('#66736e', '#a2b1ab'), fontSize: 15, lineHeight: 23 }}>Obrigado por utilizar a ConsultaJá24h. Você pode consultar seu histórico e os documentos disponíveis a qualquer momento.</Text>
+          <Pressable onPress={() => { onFecharConclusao?.(); setTela('documentos'); void carregarHome(); }} style={{ backgroundColor: '#16c783', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 18 }} accessibilityRole="button">
+            <Text style={{ color: '#07100f', fontWeight: '800' }}>Ver meus documentos</Text>
+          </Pressable>
+          <Pressable onPress={() => { onFecharConclusao?.(); setTela('home'); void carregarHome(); }} style={{ paddingVertical: 15, alignItems: 'center' }} accessibilityRole="button">
+            <Text style={{ color: themeColor('#14201d', '#d6e6dc'), fontWeight: '700' }}>Voltar ao início</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
@@ -987,6 +1016,9 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={[styles.logoutButtonText, { color: '#f87171' }]}>{excluindoConta ? 'Enviando solicitação...' : 'Excluir minha conta'}</Text>
         </Pressable>
 
+        <Pressable onPress={() => { void abrirAvaliacaoNaLoja().catch(() => Alert.alert('Avaliar aplicativo', 'Não foi possível abrir a loja neste momento.')); }} style={styles.reviewButton} accessibilityRole="button" accessibilityLabel="Avaliar nosso aplicativo">
+          <Text style={styles.reviewButtonText}>Avaliar nosso aplicativo</Text>
+        </Pressable>
         <Pressable onPress={onSair} style={styles.logoutButton}><Text style={styles.logoutButtonText}>Sair da conta</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -2001,6 +2033,8 @@ const styles = StyleSheet.create({
   profileNotice: { backgroundColor: themeColor('#eef7f1', '#10201d'), borderRadius: 16, padding: 16, marginTop: 14 },
   profileNoticeTitle: { color: themeColor('#0b8f61', '#78f25f'), fontWeight: '800', fontSize: 13 },
   profileNoticeText: { color: themeColor('#5f6c67', '#a9b5b0'), lineHeight: 19, fontSize: 12.5, marginTop: 6 },
+  reviewButton: { borderWidth: 1, borderColor: '#16c783', backgroundColor: '#0c2a20', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  reviewButtonText: { color: '#78f25f', fontSize: 14, fontWeight: '800' },
   logoutButton: { borderWidth: 1, borderColor: '#603438', backgroundColor: '#1a1112', borderRadius: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
   logoutButtonText: { color: '#ff9ca5', fontSize: 14, fontWeight: '800' },
 
