@@ -19,3 +19,10 @@ Implementada em `src/storeReview.ts` usando `expo-store-review` para as APIs nat
 5. Depois de disponibilizar o novo binário, alterações somente na lógica JavaScript de frequência e gatilho poderão ser entregues via OTA para o runtime correspondente.
 
 Verificações executadas nesta branch: `npx tsc --noEmit` e `CI=1 npx expo export --platform all --output-dir /tmp/cj-review-origin-main-export` (iOS e Android: sucesso).
+
+## Melhoria posterior para runtime 1.0.4
+
+- Tela discreta de atendimento finalizado, com acesso a documentos e retorno ao início, sem perguntar se o usuário gostou.
+- Recuperação de convite ao retornar ao aplicativo: observa histórico de consultas encerradas **apenas quando não há atendimento ativo**, limita a janela às últimas 48 horas e estabelece um marco inicial para nunca ressuscitar convites de consultas anteriores à instalação. A API nativa confirma o status antes de solicitar.
+- Essa melhoria é somente JavaScript, podendo ser entregue como EAS Update **exclusivamente para runtime 1.0.4**, que já inclui `expo-store-review` nas novas builds. Não será distribuída para runtimes 1.0.2/1.0.3.
+- E-mail pós-consulta não faz parte da build móvel. Qualquer inclusão requer avaliação separada no backend, consentimento/comunicações aplicáveis e implantação própria; **não foi enviada comunicação a pacientes**.

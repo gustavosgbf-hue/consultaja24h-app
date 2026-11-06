@@ -7,11 +7,14 @@ import { AppState, Linking, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as StoreReview from 'expo-store-review';
 import { carregarPaciente, consultarStatusAtendimento } from './api/client';
+import type { AtendimentoHistorico } from './types';
 
 const INTERVALO_DIAS = 90;
 const INTERVALO_MS = INTERVALO_DIAS * 24 * 60 * 60 * 1000;
 const CHAVE_DISPOSITIVO = 'cj24_review_attempt_device_v1';
 const CHAVE_PACIENTE = (id: number) => `cj24_review_attempt_patient_${id}_v1`;
+const CHAVE_HISTORICO = (id: number) => `cj24_review_latest_finished_${id}_v1`;
+const JANELA_RECUPERACAO_MS = 48 * 60 * 60 * 1000;
 const APP_STORE_URL = 'https://apps.apple.com/br/app/id6803718849?action=write-review';
 const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.consultaja24h.app&showAllReviews=true';
 let verificando = false;
@@ -53,6 +56,43 @@ export async function tentarAvaliacaoAposEncerramento(atendimentoId: number): Pr
     // Falha de rede/loja nunca bloqueia retorno ao início nem mensagens do paciente.
   } finally {
     verificando = false;
+  }
+}
+
+/**
+ * Recupera uma oportunidade perdida se a consulta terminou com o aplicativo fechado.
+ * Na primeira execução, estabelece um marco sem disparar convites retroativos.
+ * O histórico só é consultado se não houver atendimento em andamento.
+ */
+export async function verificarAvaliacaoPendenteNoRetorno(
+  pacienteId: number,
+  historico: AtendimentoHistorico[],
+  temAtendimentoAtivo: boolean,
+): Promise<void> {
+  if (temAtendimentoAtivo || !Number.isInteger(pacienteId) || pacienteId <= 0) return;
+  const concluidos = historico
+    .filter((item) => ['encerrado', 'finalizado', 'finalizada', 'concluido', 'concluído']
+      .includes(String(item.status || '').trim().toLowerCase()))
+    .filter((item) => Number.isInteger(item.id) && item.id > 0)
+    .sort((a, b) => b.id - a.id);
+  if (!concluidos.length) return;
+  const chave = CHAVE_HISTORICO(pacienteId);
+  try {
+    const anterior = await SecureStore.getItemAsync(chave);
+    const maior = concluidos[0];
+    // Primeiro acesso com esta funcionalidade: não resgatar consultas antigas.
+    if (anterior === null) {
+      await SecureStore.setItemAsync(chave, String(maior.id));
+      return;
+    }
+    if (maior.id <= Number(anterior)) return;
+    const data = Date.parse(maior.data_atendimento || maior.criado_em || '');
+    // Registrar como visto antes do pedido impede convites repetidos no refresh.
+    await SecureStore.setItemAsync(chave, String(maior.id));
+    if (!Number.isFinite(data) || Date.now() - data > JANELA_RECUPERACAO_MS || data > Date.now()) return;
+    await tentarAvaliacaoAposEncerramento(maior.id);
+  } catch {
+    // Avaliação opcional: não deve atrasar login, pagamento ou documentos.
   }
 }
 
