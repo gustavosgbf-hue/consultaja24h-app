@@ -82,6 +82,12 @@ function atendimentoConcluido(status?: string | null) {
   return ['encerrado', 'finalizado', 'finalizada', 'concluido', 'concluído', 'arquivado'].includes(valor);
 }
 
+function queixaOperacional(value?: string | null) {
+  const texto = String(value || '').trim();
+  return /^\(?\s*(aguardando|esperando|pendente|confirmando)\s+(o\s+)?pagamento\s*[.!?]*\)?$/i.test(texto)
+    || /^queixa principal\s*:\s*(?:aguardando|esperando|pendente|confirmando)\s+(?:o\s+)?pagamento[.!?]?(?:\s|$)/i.test(texto);
+}
+
 function digits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -1052,6 +1058,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   const [resumoParaFinalizar, setResumoParaFinalizar] = useState('');
   const [triagemLoading, setTriagemLoading] = useState(false);
   const [triagemErro, setTriagemErro] = useState(false);
+  const [refazendoQueixa, setRefazendoQueixa] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
   const motion = usePageSlide(onVoltar);
   const stageX = useRef(new Animated.Value(0)).current;
@@ -1099,7 +1106,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       setNascimentoOutro(String(atendimentoInicial.data_nascimento || ''));
     }
     const queixaSalva = String(atendimentoInicial.queixa || atendimentoInicial.triagem || '').trim();
-    const queixaBase = queixaSalva && !queixaSalva.startsWith('(') && !/^(queixa (não |nao )?informada|queixa informada anteriormente)$/i.test(queixaSalva) ? queixaSalva : '';
+    const queixaBase = queixaSalva && !queixaOperacional(queixaSalva) && !queixaSalva.startsWith('(') && !/^(queixa (não |nao )?informada|queixa informada anteriormente)$/i.test(queixaSalva) ? queixaSalva : '';
     setQueixa(queixaBase);
 
     if (atendimentoInicial.etapa === 'pagamento') {
@@ -1168,7 +1175,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
         return false;
       }
     }
-    if (queixa.trim().length < 5) {
+    if (queixa.trim().length < 5 || queixaOperacional(queixa)) {
       Alert.alert('Conte um pouco mais', 'Descreva brevemente o que está acontecendo.');
       return false;
     }
@@ -1212,6 +1219,17 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
 
   async function iniciarTriagemAposPagamento(atendimentoId: number) {
     setAtendimentoPagoId(atendimentoId);
+    // Recovery after paid checkout must not treat payment UI copy as a clinical symptom.
+    // Ask again for the complaint without creating a second paid attendance.
+    if (queixaOperacional(queixa) || queixa.trim().length < 5) {
+      setRefazendoQueixa(true);
+      setTriageMessages([]);
+      setPerguntaAtual('Qual é o motivo médico da consulta? Conte brevemente o que está sentindo. Seu pagamento já foi confirmado.');
+      setRespostaTriagem('');
+      setTriagemErro(false);
+      mudarEtapa('triagem', 1);
+      return;
+    }
     const history: TriageMessage[] = [
       { role: 'user', content: `Queixa inicial informada pelo paciente: ${queixa.trim()}` },
     ];
@@ -1273,6 +1291,16 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       setResumoParaFinalizar(resumoFinal);
       setNomeParaFinalizar(nomeAtual);
       setPrecisaConfirmarNome(true);
+      if (msg.includes('queixa_clinica_invalida')) {
+        setResumoParaFinalizar('');
+        setPrecisaConfirmarNome(false);
+        setTriagemResumo('');
+        setPerguntaAtual('Descreva o que está sentindo ou qual é o motivo clínico da consulta. Seu pagamento já está confirmado.');
+        setTriageMessages([]);
+        setRefazendoQueixa(true);
+        Alert.alert('Precisamos confirmar sua queixa', 'O sistema recebeu uma mensagem sobre pagamento em vez do motivo médico. Descreva o que está sentindo para prosseguir. Você não pagará novamente.');
+        return;
+      }
       Alert.alert('Não foi possível finalizar',
         msg === 'nome_paciente_obrigatorio'
           ? 'Confirme o nome completo do paciente para liberar a consulta já paga.'
@@ -1312,7 +1340,10 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     const resposta = respostaTriagem.trim();
     if (!resposta || triagemLoading || !atendimentoPagoId) return;
     const perguntaAnterior = perguntaAtual;
-    const history: TriageMessage[] = [...triageMessages, { role: 'user', content: resposta }];
+    const history: TriageMessage[] = refazendoQueixa
+      ? [{role:'user',content:`Queixa inicial informada pelo paciente: ${resposta}`}]
+      : [...triageMessages, { role: 'user', content: resposta }];
+    if (refazendoQueixa) { setQueixa(resposta); setRefazendoQueixa(false); }
     setRespostaTriagem('');
     setPerguntaAtual('');
     setTriageMessages(history);
@@ -1324,6 +1355,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       setRespostaTriagem(resposta);
       setPerguntaAtual(perguntaAnterior);
       setTriageMessages(triageMessages);
+      if (history.length === 1 && triageMessages.length === 0) setRefazendoQueixa(true);
       Alert.alert('Não foi possível continuar', 'Sua resposta foi mantida. Tente enviar novamente.');
     } finally {
       setTriagemLoading(false);
