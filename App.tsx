@@ -31,6 +31,8 @@ import {
   carregarPaciente,
   carregarAtendimentoEmAndamento,
   completarPerfilPaciente,
+  carregarPushMarketing,
+  salvarPushMarketing,
   carregarRenovacoesPaciente,
   carregarRenovacaoPaciente,
   conversarTriagem,
@@ -969,6 +971,21 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
       ],
     );
   }
+
+  const [marketing, setMarketing] = useState<boolean|null>(null);
+  const [marketingReady, setMarketingReady] = useState(false);
+  useEffect(() => {
+    let ativo = true;
+    carregarPushMarketing().then(r => { if (ativo) { setMarketing(r.autorizado); setMarketingReady(true); } }).catch(() => {});
+    return () => { ativo = false; };
+  }, []);
+  async function alterarMarketing() {
+    if (!marketingReady) return;
+    setMarketingReady(false);
+    try { const r = await salvarPushMarketing(marketing !== true); setMarketing(r.autorizado); }
+    catch { Alert.alert('Notificações', 'Não foi possível salvar. Tente novamente.'); }
+    finally { setMarketingReady(true); }
+  }
   return (
     <Animated.View style={motion.style}>
     <SafeAreaView style={styles.safe}>
@@ -1006,6 +1023,13 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
           <Text style={styles.profileNoticeText}>Seus dados clínicos e documentos são vinculados ao paciente, não ao titular do cartão usado no pagamento.</Text>
         </View>
 
+        <View style={styles.profileNotice}>
+          <Text style={styles.profileNoticeTitle}>Notificações promocionais</Text>
+          <Text style={styles.profileNoticeText}>Receba novidades, ofertas e lembretes sobre os serviços da ConsultaJá24h por push. A escolha é opcional e pode ser alterada aqui a qualquer momento. Não afeta notificações de atendimento.</Text>
+          <Pressable disabled={!marketingReady} onPress={() => void alterarMarketing()} style={styles.reviewButton} accessibilityRole="button">
+            <Text style={styles.reviewButtonText}>{marketing === true ? 'Desativar notificações promocionais' : 'Quero receber notificações promocionais'}</Text>
+          </Pressable>
+        </View>
         <Pressable
           onPress={confirmarExclusaoConta}
           disabled={excluindoConta}
