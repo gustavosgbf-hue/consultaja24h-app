@@ -76,7 +76,7 @@ Nunca use o prefixo TRIAGEM_CONCLUIDA: antes de ter feito pelo menos uma pergunt
 
 type Tela = 'home' | 'finalizacao' | 'perfil' | 'nova-consulta' | 'documentos' | 'historico-chat' | 'servicos' | 'web' | 'renovacao';
 type AtendimentoPara = 'mim' | 'outra-pessoa';
-type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila';
+type EtapaConsulta = 'dados' | 'pagamento' | 'triagem' | 'fila' | 'chat';
 const finalNavigationPolishApplied = true;
 
 function atendimentoConcluido(status?: string | null) {
@@ -1077,6 +1077,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
   const [triagemLoading, setTriagemLoading] = useState(false);
   const [triagemErro, setTriagemErro] = useState(false);
   const [atendimentoPagoId, setAtendimentoPagoId] = useState<number | null>(null);
+  const [medicoChat, setMedicoChat] = useState<string | null>(null);
   const motion = usePageSlide(onVoltar);
   const stageX = useRef(new Animated.Value(0)).current;
   const stageOpacity = useRef(new Animated.Value(1)).current;
@@ -1130,7 +1131,12 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
       setEtapaConsulta('pagamento');
       return;
     }
-    if (atendimentoInicial.etapa === 'fila' || atendimentoInicial.etapa === 'chat') {
+    if (atendimentoInicial.etapa === 'chat') {
+      setMedicoChat(atendimentoInicial.medico_nome || null);
+      setEtapaConsulta('chat');
+      return;
+    }
+    if (atendimentoInicial.etapa === 'fila') {
       setEtapaConsulta('fila');
       return;
     }
@@ -1163,6 +1169,32 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
         .finally(() => setTriagemLoading(false));
     }
   }, [atendimentoInicial?.id]);
+
+  // This screen can be mounted independently of AppRoot after resuming a
+  // consultation. Always recover the exact authenticated visit, not another
+  // visit or a stale queue state.
+  useEffect(() => {
+    if (etapaConsulta !== 'fila' || !atendimentoPagoId) return;
+    let ativo = true;
+    let checking = false;
+    async function recuperarChat() {
+      if (!ativo || checking) return;
+      checking = true;
+      try {
+        const { atendimento } = await carregarAtendimentoEmAndamento();
+        if (!ativo || Number(atendimento?.id) !== atendimentoPagoId) return;
+        if (atendimento?.etapa === 'chat') {
+          setMedicoChat(atendimento.medico_nome || null);
+          setEtapaConsulta('chat');
+        }
+      } catch {
+        // The authenticated endpoint is retried on the next poll.
+      } finally { checking = false; }
+    }
+    void recuperarChat();
+    const timer = setInterval(recuperarChat, 3000);
+    return () => { ativo = false; clearInterval(timer); };
+  }, [etapaConsulta, atendimentoPagoId]);
 
   function validarDados() {
     if (para === 'outra-pessoa') {
@@ -1361,6 +1393,10 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     if (etapaConsulta === 'triagem') {
       Alert.alert('Pagamento já confirmado', 'Conclua a triagem para seguir ao atendimento.');
     }
+  }
+
+  if (etapaConsulta === 'chat' && atendimentoPagoId) {
+    return <ChatPaciente atendimentoId={atendimentoPagoId} medicoNome={medicoChat} onVoltar={onVoltar} />;
   }
 
   if (etapaConsulta === 'pagamento') {

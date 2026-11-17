@@ -234,7 +234,7 @@ export async function iniciarAtendimento(input: IniciarAtendimentoInput) {
     atendimento_para_terceiro: !!input.atendimentoParaTerceiro,
     origem: `app_${Platform.OS}`,
     attribution,
-  });
+  }, true);
   if (result.atendimentoId) void trackIosEvent('ios_consulta_started', result.atendimentoId);
   return result;
 }

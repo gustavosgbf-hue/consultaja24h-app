@@ -193,6 +193,7 @@ export default function PagamentoConsulta({
     setStatus('Criando atendimento…');
     try {
       const id = await garantirAtendimento();
+      if (pagamentoConcluidoRef.current) return;
       setStatus('Gerando PIX…');
       const pix = await gerarPixConsulta({
         atendimentoId: id,
@@ -239,6 +240,7 @@ export default function PagamentoConsulta({
     setStatus('Processando cartão com a Efí…');
     try {
       const id = await garantirAtendimento();
+      if (pagamentoConcluidoRef.current) return;
       const resposta = await cobrarCartaoConsulta({
         atendimentoId: id,
         paymentToken: payload.paymentToken,
@@ -281,6 +283,7 @@ export default function PagamentoConsulta({
       const cfg = await buscarConfigStripe();
       if (!cfg.enabled || !cfg.publishableKey || cfg.mode !== 'live') throw new Error('Pagamento com cartão temporariamente indisponível.');
       const id = await garantirAtendimento();
+      if (pagamentoConcluidoRef.current) return;
       const sessao = await criarSessaoStripe(id, pacienteLogado.email || undefined);
       if (!sessao.clientSecret || !sessao.sessionId) throw new Error('A Stripe não retornou uma sessão válida.');
       setStripeConfig({ publishableKey: cfg.publishableKey });
@@ -296,20 +299,28 @@ export default function PagamentoConsulta({
   async function verificarStripe() {
     if (!atendimentoId || !stripeSession) return;
     try {
-      const resultado = await consultarSessaoStripe(stripeSession.sessionId);
-      if (resultado.paid && resultado.atendimentoId === atendimentoId) {
+      let pagoNaStripe = false;
+      try {
+        const resultado = await consultarSessaoStripe(stripeSession.sessionId);
+        pagoNaStripe = resultado.paid && Number(resultado.atendimentoId) === atendimentoId;
+      } catch {
+        // A sessão Stripe pode falhar mesmo depois do webhook confirmar.
+      }
+      const confirmado = pagoNaStripe || (await consultarStatusAtendimento(atendimentoId)).atendimento?.pagamento_status === 'confirmado';
+      if (confirmado) {
         setStatus('Pagamento confirmado');
         confirmarPagamento(atendimentoId);
       } else {
         setStatus('Aguardando confirmação da Stripe…');
       }
     } catch {
-      // O webhook é a confirmação definitiva; o polling também reconcilia a sessão.
+      // O próximo polling tenta novamente.
     }
   }
 
   useEffect(() => {
     if (!stripeSession || !atendimentoId || pagamentoConcluidoRef.current) return;
+    void verificarStripe();
     const timer = setInterval(() => { void verificarStripe(); }, 3000);
     return () => clearInterval(timer);
   }, [stripeSession, atendimentoId]);
