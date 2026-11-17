@@ -9,7 +9,9 @@ import {
   consultarSessaoStripe,
   consultarStatusAtendimento,
   consultarStatusPix,
+  carregarAtendimentoEmAndamento,
   gerarPixConsulta,
+  type AtendimentoEmAndamento,
   iniciarAtendimento,
   vincularPixAoAtendimento,
 } from '../api/client';
@@ -23,6 +25,7 @@ type Props = {
   pacienteNome: string;
   pacienteCpf: string;
   pacienteNascimento?: string;
+  atendimentoInicial?: AtendimentoEmAndamento | null;
   onVoltar: () => void;
   onPagamentoConfirmado: (atendimentoId: number) => void;
 };
@@ -46,6 +49,7 @@ export default function PagamentoConsulta({
   pacienteNome,
   pacienteCpf,
   pacienteNascimento,
+  atendimentoInicial,
   onVoltar,
   onPagamentoConfirmado,
 }: Props) {
@@ -54,9 +58,11 @@ export default function PagamentoConsulta({
   confirmarCallbackRef.current = onPagamentoConfirmado;
   const [metodo, setMetodo] = useState<Metodo>('pix');
   const [loading, setLoading] = useState(false);
-  const [atendimentoId, setAtendimentoId] = useState<number | null>(null);
-  const [orderId, setOrderId] = useState('');
-  const [pixCode, setPixCode] = useState('');
+  const [atendimentoId, setAtendimentoId] = useState<number | null>(atendimentoInicial?.id || null);
+  const [orderId, setOrderId] = useState(atendimentoInicial?.pagbank_order_id || '');
+  const [pixCode, setPixCode] = useState(atendimentoInicial?.pagbank_qr_text || '');
+  const [pixExpira, setPixExpira] = useState(atendimentoInicial?.pagbank_qr_expira_em || '');
+  const [agora, setAgora] = useState(Date.now());
   const [valor, setValor] = useState<number | undefined>();
   const [status, setStatus] = useState('');
   const [copiado, setCopiado] = useState(false);
@@ -68,6 +74,23 @@ export default function PagamentoConsulta({
 
   const pagadorCpf = useMemo(() => digits(pacienteLogado.cpf), [pacienteLogado.cpf]);
   const telefoneContato = useMemo(() => digits(pacienteLogado.tel), [pacienteLogado.tel]);
+  // Rehydration is required when the bank app backgrounds or remounts the
+  // consultation. A pending payment always resumes the SAME attendance.
+  useEffect(() => {
+    if (!atendimentoInicial?.id || pagamentoConcluidoRef.current) return;
+    setAtendimentoId(atendimentoInicial.id);
+    setOrderId(atendimentoInicial.pagbank_order_id || '');
+    setPixCode(atendimentoInicial.pagbank_qr_text || '');
+    setPixExpira(atendimentoInicial.pagbank_qr_expira_em || '');
+  }, [atendimentoInicial?.id]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const pixExpirado = !!pixCode && !!pixExpira && new Date(pixExpira).getTime() <= agora;
+
   const modoReview = telefoneContato === '98900000000';
   const cardEnabled = CARD_ENABLED || modoReview;
 
@@ -208,6 +231,10 @@ export default function PagamentoConsulta({
       await vincularPixAoAtendimento(id, pix.order_id);
       setOrderId(pix.order_id);
       setPixCode(pix.qr_code_text);
+      setPixExpira('');
+      void carregarAtendimentoEmAndamento().then(({ atendimento }) => {
+        if (atendimento?.id === id) setPixExpira(atendimento.pagbank_qr_expira_em || '');
+      }).catch(() => {});
       setValor(pix.valor);
       setStatus('Aguardando pagamento…');
     } catch (error) {
@@ -324,6 +351,48 @@ export default function PagamentoConsulta({
     const timer = setInterval(() => { void verificarStripe(); }, 3000);
     return () => clearInterval(timer);
   }, [stripeSession, atendimentoId]);
+
+  async function renovarPixExpirado() {
+    if (!atendimentoId || loading) return;
+    setLoading(true);
+    setStatus('Conferindo a cobrança anterior…');
+    try {
+      const statusAtual = await consultarStatusAtendimento(atendimentoId);
+      if (statusAtual.atendimento?.pagamento_status === 'confirmado') {
+        confirmarPagamento(atendimentoId);
+        return;
+      }
+      if (orderId) {
+        const anterior = await consultarStatusPix(orderId);
+        if (anterior.pago) {
+          confirmarPagamento(atendimentoId);
+          return;
+        }
+      }
+      // The backend reuses active orders and replaces only expired ones.
+      const pix = await gerarPixConsulta({
+        atendimentoId,
+        pagadorNome: pacienteLogado.nome,
+        pagadorCpf,
+        pagadorEmail: pacienteLogado.email || undefined,
+        pacienteNome,
+        pacienteCpf: digits(pacienteCpf),
+        atendimentoParaTerceiro,
+      });
+      setOrderId(pix.order_id);
+      setPixCode(pix.qr_code_text);
+      setPixExpira('');
+      void carregarAtendimentoEmAndamento().then(({ atendimento }) => {
+        if (atendimento?.id === atendimentoId) setPixExpira(atendimento.pagbank_qr_expira_em || '');
+      }).catch(() => {});
+      setValor(pix.valor);
+      setStatus('Novo PIX disponível. Confira o código antes de pagar.');
+    } catch (error) {
+      Alert.alert('PIX', error instanceof Error ? error.message : 'Não foi possível renovar o PIX. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function copiarPix() {
     if (!pixCode) return;
@@ -457,11 +526,19 @@ export default function PagamentoConsulta({
         <View style={styles.pixCard}>
           <Text style={styles.pixEyebrow}>PAGAMENTO VIA PIX</Text>
           <Text style={styles.pixValue}>{formatarValor(valor)}</Text>
-          <Text style={styles.pixInstruction}>Abra o app do seu banco e escaneie o QR Code ou copie o código abaixo.</Text>
+          <Text style={styles.pixInstruction}>{pixExpirado ? 'Este PIX expirou. Confira o pagamento anterior antes de gerar um novo código.' : 'Abra o app do seu banco e escaneie o QR Code ou copie o código abaixo.'}</Text>
           {modoReview ? <Text style={styles.safeText}>QR Code demonstrativo para App Review. A confirmação acontece automaticamente e não gera cobrança.</Text> : null}
-          <View style={styles.qrWrap}><QRCode value={pixCode} size={205} quietZone={10} /></View>
-          <Pressable onPress={copiarPix} style={styles.copyButton}><Text style={styles.copyButtonText}>{copiado ? '✓ Código copiado' : 'Copiar código PIX'}</Text></Pressable>
-          <View style={styles.codeBox}><Text numberOfLines={3} style={styles.codeText}>{pixCode}</Text></View>
+          {!pixExpirado ? (
+            <>
+              <View style={styles.qrWrap}><QRCode value={pixCode} size={205} quietZone={10} /></View>
+              <Pressable onPress={copiarPix} style={styles.copyButton}><Text style={styles.copyButtonText}>{copiado ? '✓ Código copiado' : 'Copiar código PIX'}</Text></Pressable>
+              <View style={styles.codeBox}><Text numberOfLines={3} style={styles.codeText}>{pixCode}</Text></View>
+            </>
+          ) : (
+            <Pressable onPress={() => void renovarPixExpirado()} disabled={loading} style={[styles.copyButton, loading && { opacity: .6 }]}>
+              <Text style={styles.copyButtonText}>{loading ? 'Conferindo pagamento…' : 'Gerar novo PIX para esta consulta'}</Text>
+            </Pressable>
+          )}
           <View style={styles.statusRow}><ActivityIndicator size="small" color="#16c783" /><Text style={styles.statusText}>{status || 'Aguardando pagamento…'}</Text></View>
           <Pressable onPress={verificarAgora} style={styles.verifyButton}><Text style={styles.verifyText}>Já paguei · verificar agora</Text></Pressable>
           <Text style={styles.safeText}>Assim que o PagBank confirmar, a triagem será liberada automaticamente. Você não precisará pagar novamente.</Text>

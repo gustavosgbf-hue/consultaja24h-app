@@ -275,7 +275,7 @@ export default function AppRoot() {
 
   return (
     <View style={styles.appWrap}>
-      <LegacyApp resumeTriagem={atendimento?.etapa === 'triagem' ? atendimento : null} conclusaoAtendimentoId={conclusaoAtendimentoId} onFecharConclusao={() => setConclusaoAtendimentoId(null)} />
+      <LegacyApp resumeTriagem={atendimento?.etapa === 'triagem' || atendimento?.etapa === 'pagamento' ? atendimento : null} conclusaoAtendimentoId={conclusaoAtendimentoId} onFecharConclusao={() => setConclusaoAtendimentoId(null)} />
       {atendimento && atendimento.etapa !== 'triagem' && atendimento.etapa !== 'pagamento' && !betaEmTriagem ? (
         <Pressable
           onPress={() => {

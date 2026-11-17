@@ -252,10 +252,10 @@ export default function App({ resumeTriagem = null, conclusaoAtendimentoId = nul
     if (paciente && conclusaoAtendimentoId && tela === 'home') setTela('finalizacao');
   }, [paciente, conclusaoAtendimentoId, tela]);
 
-  // Uma consulta paga que retornou do background deve abrir a triagem real,
-  // nunca ficar presa em uma tela informativa sem campo de resposta.
+  // Retomar tanto a triagem paga quanto o PIX pendente após voltar do banco,
+  // preservando o atendimento e o código de pagamento já gerados.
   useEffect(() => {
-    if (!paciente || !resumeTriagem || resumeTriagem.etapa !== 'triagem' || tela !== 'home') return;
+    if (!paciente || !resumeTriagem || !['triagem', 'pagamento'].includes(resumeTriagem.etapa) || tela !== 'home') return;
     setAtendimentoEmAndamento(resumeTriagem);
     setRetomarAtendimento((atual) => atual?.id === resumeTriagem.id ? atual : resumeTriagem);
     setTela('nova-consulta');
@@ -1413,6 +1413,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
             pacienteNome={pacienteNomeSelecionado}
             pacienteCpf={pacienteCpfSelecionado}
             pacienteNascimento={pacienteNascimentoSelecionado}
+            atendimentoInicial={atendimentoInicial}
             onVoltar={voltarEtapa}
             onPagamentoConfirmado={iniciarTriagemAposPagamento}
           />
