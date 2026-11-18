@@ -257,7 +257,7 @@ export default function App({ resumeTriagem = null, conclusaoAtendimentoId = nul
   useEffect(() => {
     if (!paciente || !resumeTriagem || !['triagem', 'pagamento'].includes(resumeTriagem.etapa) || tela !== 'home') return;
     setAtendimentoEmAndamento(resumeTriagem);
-    setRetomarAtendimento((atual) => atual?.id === resumeTriagem.id ? atual : resumeTriagem);
+    setRetomarAtendimento((atual) => atual?.id === resumeTriagem.id ? { ...atual, ...resumeTriagem } : resumeTriagem);
     setTela('nova-consulta');
   }, [paciente, resumeTriagem?.id, resumeTriagem?.etapa, tela]);
 
@@ -1053,6 +1053,7 @@ function Perfil({ paciente, onVoltar, onSair }: { paciente: Paciente; onVoltar: 
 function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualizado }: { paciente: Paciente; atendimentoInicial?: AtendimentoEmAndamento | null; onVoltar: () => void; onPerfilAtualizado: (paciente: Paciente) => void }) {
   const [para, setPara] = useState<AtendimentoPara>('mim');
   const [etapaConsulta, setEtapaConsulta] = useState<EtapaConsulta>('dados');
+  const [pagamentoRecuperado, setPagamentoRecuperado] = useState<AtendimentoEmAndamento | null>(atendimentoInicial || null);
   const [nomeOutro, setNomeOutro] = useState('');
   const [cpfOutro, setCpfOutro] = useState('');
   const [nascimentoOutro, setNascimentoOutro] = useState('');
@@ -1127,6 +1128,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     const queixaBase = queixaSalva && !queixaSalva.startsWith('(') && !/^(queixa (não |nao )?informada|queixa informada anteriormente)$/i.test(queixaSalva) ? queixaSalva : '';
     setQueixa(queixaBase);
 
+    setPagamentoRecuperado(atendimentoInicial);
     if (atendimentoInicial.etapa === 'pagamento') {
       setEtapaConsulta('pagamento');
       return;
@@ -1238,6 +1240,13 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
     if (!modoReviewFluxo) {
       try {
         const existente = await carregarAtendimentoEmAndamento();
+        if (existente.atendimento?.etapa === 'pagamento') {
+          // A pessoa pode ter voltado aos dados após gerar o PIX. Reabrir
+          // a mesma cobrança, sem criar outro atendimento nem outro QR.
+          setPagamentoRecuperado(existente.atendimento);
+          mudarEtapa('pagamento', 1);
+          return;
+        }
         if (existente.atendimento) {
           Alert.alert('Atendimento em andamento', 'Você já tem uma consulta em andamento. Continue o atendimento atual antes de iniciar outra.');
           onVoltar();
@@ -1413,7 +1422,7 @@ function NovaConsulta({ paciente, atendimentoInicial, onVoltar, onPerfilAtualiza
             pacienteNome={pacienteNomeSelecionado}
             pacienteCpf={pacienteCpfSelecionado}
             pacienteNascimento={pacienteNascimentoSelecionado}
-            atendimentoInicial={atendimentoInicial}
+            atendimentoInicial={pagamentoRecuperado || atendimentoInicial}
             onVoltar={voltarEtapa}
             onPagamentoConfirmado={iniciarTriagemAposPagamento}
           />
